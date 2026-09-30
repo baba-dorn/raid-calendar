@@ -77,6 +77,6 @@
   ],
   "assignments": [
     
-    { "match": "Speed.?Dating", "lane": "monthly" ,"end": "21:00" }
+    { "match": "Speed.?Dating", "lane": "monthly" ,"end": "18:00" }
   ]
 }
