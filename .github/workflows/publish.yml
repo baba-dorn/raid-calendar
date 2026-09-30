@@ -12,9 +12,16 @@ on:
   push:
     branches: [main]
     paths:
+      # Alles, was das Deployment tatsächlich verändert. `lanes.json` stand
+      # hier zunächst nicht drin: Eine neue oder geänderte Spur wäre dann erst
+      # beim nächsten Zeitplanlauf online gewesen – sechs Stunden, obwohl sie im
+      # Repo längst eingetragen war. Dasselbe gilt für den Erzeuger selbst.
       - 'public/**'
       - 'src/**'
+      - 'tools/snapshot.mjs'
+      - 'lanes.json'
       - 'server.js'
+      - 'package.json'
       - '.github/workflows/publish.yml'
 
 # Eine spätere Planung bricht frühere Läufe ab – der Token wird sonst im
