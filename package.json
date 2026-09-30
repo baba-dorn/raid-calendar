@@ -1,0 +1,14 @@
+{
+  "name": "discord-week-calendar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Discord-Guild-Events als Wochenkalender auf einer Webseite",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  }
+}

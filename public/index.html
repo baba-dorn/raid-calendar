@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wochenplan</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗓️</text></svg>"
+    />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="brand">
+        <div class="brand-crest" id="guildIcon" aria-hidden="true"></div>
+        <h1 class="brand-name" id="guildName">…</h1>
+        <p class="brand-tagline">Wochenplan</p>
+        <dl class="brand-meta" id="brandMeta"></dl>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="week-nav">
+            <button class="nav-btn" id="prevWeek" type="button" aria-label="Vorherige Woche">‹</button>
+            <div class="week-label">
+              <span class="week-range" id="weekRange">…</span>
+              <span class="week-sub" id="weekSub"></span>
+            </div>
+            <button class="nav-btn" id="nextWeek" type="button" aria-label="Nächste Woche">›</button>
+            <button class="nav-btn nav-btn--wide" id="todayBtn" type="button">Diese Woche</button>
+          </div>
+
+          <div class="topbar-right">
+            <label class="tz-field">
+              <span>Zeitzone</span>
+              <select id="timezone"></select>
+            </label>
+            <div class="status" id="status" role="status"></div>
+          </div>
+        </header>
+
+        <section class="board" aria-label="Wochenübersicht">
+          <div class="board-head" id="boardHead"></div>
+          <div class="board-body" id="boardBody"></div>
+        </section>
+
+        <footer class="legend" id="legend"></footer>
+      </main>
+    </div>
+
+    <aside class="detail" id="detail" aria-hidden="true">
+      <button class="detail-close" id="detailClose" type="button" aria-label="Schließen">×</button>
+      <div id="detailContent"></div>
+    </aside>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
