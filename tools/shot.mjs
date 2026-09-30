@@ -5,11 +5,14 @@
  * Benoetigt keinen npm-Screenshotbaustein.
  */
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const [url, target, width = '1847', height = '987', evalJs = '', clipSpec = ''] = process.argv.slice(2);
+const [url, target, width = '1847', height = '987', evalJsArg = '', clipSpec = ''] = process.argv.slice(2);
+// "@datei.js" liest den Ausdruck aus einer Datei. Mehrzeiliges JS als
+// Kommandozeile mitzugeben ueberleben je nach Shell keine Backticks.
+const evalJs = evalJsArg.startsWith('@') ? readFileSync(evalJsArg.slice(1), 'utf8') : evalJsArg;
 if (!url || !target) {
   console.error('Aufruf: node tools/shot.mjs <url> <ziel.png> [breite] [hoehe] [js] [ausschnitt=x,y,w,h,scale]');
   process.exit(1);
@@ -25,6 +28,7 @@ const chrome = spawn(CHROME, [
   `--remote-debugging-port=${PORT}`,
   `--user-data-dir=${mkdtempSync(join(tmpdir(), 'shot-'))}`,
   '--no-first-run',
+  '--no-sandbox',
   '--disable-gpu',
   '--hide-scrollbars',
   `--window-size=${width},${height}`,
@@ -56,6 +60,16 @@ const pending = new Map();
 
 ws.addEventListener('message', (event) => {
   const message = JSON.parse(event.data);
+
+  // Seitenfehler mit Stack ausgeben – sonst sucht man sie im Bild.
+  if (message.method === 'Runtime.exceptionThrown') {
+    const details = message.params.exceptionDetails;
+    console.error('Seitenfehler:', details.exception?.description ?? details.text);
+  }
+  if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error') {
+    console.error('console.error:', message.params.args.map((a) => a.description ?? a.value).join(' '));
+  }
+
   if (message.id && pending.has(message.id)) {
     pending.get(message.id)(message);
     pending.delete(message.id);
@@ -72,6 +86,7 @@ const send = (method, params = {}) =>
 await new Promise((resolve) => ws.addEventListener('open', resolve, { once: true }));
 
 await send('Page.enable');
+await send('Runtime.enable');
 await send('Emulation.setDeviceMetricsOverride', {
   width: Number(width),
   height: Number(height),
@@ -82,7 +97,7 @@ await send('Page.navigate', { url });
 await sleep(2500);
 
 if (evalJs) {
-  const result = await send('Runtime.evaluate', { expression: evalJs, returnByValue: true });
+  const result = await send('Runtime.evaluate', { expression: evalJs, returnByValue: true, awaitPromise: true });
   const value = result.result?.result?.value;
   console.log('eval:', value === undefined ? JSON.stringify(result.result) : JSON.stringify(value));
   await sleep(600);

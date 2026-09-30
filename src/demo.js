@@ -4,7 +4,8 @@ const EVERY_DAY = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 
 /** Discord-Wochentagsnummern: 0 = Sonntag. */
 const MONDAY = 1;
-const TUESDAY = 2;
+const WEDNESDAY = 3;
+const THURSDAY = 4;
 const FRIDAY = 5;
 const SATURDAY = 6;
 const SUNDAY = 0;
@@ -13,6 +14,16 @@ const SUNDAY = 0;
  * Beispieldaten, damit die Wochenübersicht ohne Bot-Token startet.
  * Gleiche Struktur wie `normalizeEvent` aus discord.js.
  * Verankert am Montag der aktuellen Woche, damit das Layout planbar bleibt.
+ *
+ * Alles steht hier an seiner echten Uhrzeit – die Wochenansicht hat eine
+ * Zeitachse, da wird nichts überschrieben oder zusammengefasst:
+ *
+ *   – eine tägliche Serie (Public) als Wiederholung, sie belegt den Slot
+ *   – Spätschicht bewusst **ohne** Event, damit der Slot aus `lanes.json`
+ *     sichtbar bleibt; dazu ein abgesagter Termin auf demselben Fenster
+ *   – eine einmalige Veranstaltung am Donnerstag, mitten im Public-Fenster
+ *   – ein Reset-Raid am Freitag mit Bonusrunde davor
+ *   – drei Termine ohne Slot
  */
 export function buildDemoEvents(guildId, timeZone, now = new Date()) {
   const weekStart = alignToWeekStart(todayDayNumber(timeZone, now), 1);
@@ -50,16 +61,16 @@ export function buildDemoEvents(guildId, timeZone, now = new Date()) {
       userCount: 12,
       recurrence: { start: at(MONDAY, 19), frequency: 3, interval: 1, by_weekday: EVERY_DAY },
     }),
+
     make({
-      slug: 'spaet',
-      name: '🌀 Spätschicht mit Meow',
-      description: 'Für die Nachtschicht. Kein Druck, einfach mithalten.',
-      start: at(MONDAY, 23),
-      end: at(TUESDAY, 1, 30),
-      userCount: 4,
-      entityType: 'STAGE_INSTANCE',
-      recurrence: { start: at(MONDAY, 23), frequency: 3, interval: 1, by_weekday: EVERY_DAY },
+      slug: 'ruhetag',
+      name: '😴 Ruhetag',
+      description: 'Meow ist krank – die Nachtschicht faellt aus.',
+      status: 'CANCELED',
+      start: at(WEDNESDAY, 23),
+      end: at(THURSDAY, 1, 30),
     }),
+
     make({
       slug: 'kommi',
       name: '☀️ Kommi-Wechsel-Dich',
@@ -67,8 +78,20 @@ export function buildDemoEvents(guildId, timeZone, now = new Date()) {
       start: at(FRIDAY, 20),
       end: at(FRIDAY, 23, 30),
       userCount: 20,
-      recurrence: { start: at(FRIDAY, 20), frequency: 2, interval: 1, by_weekday: ['FR'] },
+      // So sieht Discord die meisten Raids: ohne Endzeit. Die Endzeit holt
+      // sich die Regel aus `lanes.json`, das „≈“ sagt, dass es eine Annahme ist.
+      endIsEstimated: true,
     }),
+
+    make({
+      slug: 'reset-bonus',
+      name: '⚡ Reset-Bonusrunde',
+      description: 'Kurze Runde vor dem Reset, wer Zeit hat.',
+      start: at(FRIDAY, 18),
+      end: at(FRIDAY, 19),
+      userCount: 8,
+    }),
+
     make({
       slug: 'starter',
       name: '🗡️ Oops Starter-Session',
@@ -76,7 +99,11 @@ export function buildDemoEvents(guildId, timeZone, now = new Date()) {
       start: at(SATURDAY, 17),
       end: at(SATURDAY, 18, 30),
       userCount: 7,
+      // Endzeit fehlt und es gibt keine passende Regel: hier bleibt nur die
+      // pauschale Annahme aus `DEFAULT_DURATION_MINUTES`.
+      endIsEstimated: true,
     }),
+
     make({
       slug: 'fightclub',
       name: '⚔️ Oops Fightclub',
@@ -85,6 +112,7 @@ export function buildDemoEvents(guildId, timeZone, now = new Date()) {
       end: at(SATURDAY, 21),
       userCount: 9,
     }),
+
     make({
       slug: 'coffetag',
       name: '☕ Coffetag mit Steini',

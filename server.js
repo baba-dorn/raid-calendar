@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { buildWeek, resolveTimeZone } from './src/calendar.js';
 import { config, isDemoMode } from './src/config.js';
 import { diagnose, explainError } from './src/diagnose.js';
+import { applyLanes } from './src/lanes.js';
 import { getEvents } from './src/source.js';
 
 const PUBLIC_DIR = resolve(fileURLToPath(new URL('./public', import.meta.url)));
@@ -47,10 +48,33 @@ function serveStatic(req, res, pathname) {
     return;
   }
 
-  res.writeHead(200, {
+  const stat = statSync(target);
+
+  // `no-cache` allein lässt den Browser ohne Validator raten: Er soll bei
+  // jedem Aufruf nachfragen, hat aber nichts, womit er das beantworten kann,
+  // und landet im Zweifel beim alten Stand. Genau das passiert beim
+  // Arbeiten am laufenden Server – man ändert app.js, der Tab zeigt weiter
+  // die alte Fassung, und eine Fehlermeldung nennt Zeilennummern, die es im
+  // Quelltext nicht mehr gibt. Ein ETag aus Größe und mtime macht daraus eine
+  // ehrliche Frage: Geändert? 200 mit neuem Inhalt, unverändert? 304.
+  const etag = `W/"${stat.size.toString(16)}-${stat.mtimeMs.toString(16)}"`;
+  const headers = {
     'Content-Type': MIME[extname(target).toLowerCase()] ?? 'application/octet-stream',
     'Cache-Control': 'no-cache',
-  });
+    ETag: etag,
+    'Last-Modified': stat.mtime.toUTCString(),
+  };
+
+  if (req.headers['if-none-match'] === etag) {
+    res.writeHead(304, headers).end();
+    return;
+  }
+
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
   createReadStream(target).pipe(res);
 }
 
@@ -69,11 +93,17 @@ const server = createServer(async (req, res) => {
       weekStartsOn: config.weekStartsOn,
     });
 
+    // Spuren sind nur Farbe und Beschriftung – der Zeitpunkt jedes Termins
+    // bleibt allein davon unberührt.
+    const { lanes, source } = applyLanes(week);
+
     sendJson(res, 200, {
       ...week,
+      lanes,
       meta: {
         source: isDemoMode ? 'demo' : 'discord',
         hourHeight: config.hourHeight,
+        lanes: source,
         fetchedAt: new Date(fetchedAt).toISOString(),
         stale: Boolean(stale),
         error: error ?? null,
@@ -94,9 +124,18 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/health') {
+    // `?guild=` prüft einen anderen Server, `?event=` einen einzelnen Termin –
+    // beides ohne die Konfiguration zu ändern. Der Bot ist oft in mehreren
+    // Gilden, und die Frage ist dann, wo das Event steht und in welchem Zustand.
+    const asked = url.searchParams.get('guild');
+    const guild = asked && /^\d{17,20}$/.test(asked) ? asked : null;
+    const eventParam = url.searchParams.get('event');
+    const event = eventParam && /^\d{17,20}$/.test(eventParam) ? eventParam : null;
+    const channelParam = url.searchParams.get('channel');
+    const channel = channelParam && /^\d{17,20}$/.test(channelParam) ? channelParam : null;
     sendJson(res, 200, {
       uptimeSeconds: Math.round(process.uptime()),
-      ...(await diagnose()),
+      ...(await diagnose(guild, event, channel)),
     });
     return;
   }

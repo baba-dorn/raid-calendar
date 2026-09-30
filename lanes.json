@@ -1,0 +1,82 @@
+{
+  "_hinweis": [
+    "Spuren und Grundzeilen des Wochenplans. Discord kennt das Feld 'lane' nicht,",
+    "die Zuordnung entsteht aus dem Eventnamen ([TAG]), aus 'assignments' hier",
+    "oder – als Notfall – aus der Überlappung mit einer Grundzeile.",
+    "Wird die Datei gelöscht, gelten dieselben Vorgaben aus src/lanes.js."
+  ],
+
+  "lanes": [
+    {
+      "id": "public",
+      "label": "Public",
+      "host": "mit Dorn",
+      "glyph": "🌙",
+      "accent": "#8fdc4a",
+      "note": "Zusammenlegen, Boss-Routen üben, nette Leute kennenlernen. Offen für alle.",
+      "voiceChannel": "1268920421403594832",
+      "match": ["public"],
+      "baseline": {
+        "days": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"],
+        "start": "19:30",
+        "end": "22:00"
+      }
+    },
+    {
+      "id": "late",
+      "label": "Spätschicht",
+      "host": "mit Meow",
+      "glyph": "🌀",
+      "accent": "#b06bff",
+      "note": "Für die Nachtschicht. Kein Druck, einfach mithalten.",
+      "voiceChannel": "1268920421403594832",
+      "match": ["spätschicht", "spaetschicht", "nachtschicht", "\\blate\\b"],
+      "baseline": {
+        "days": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"],
+        "start": "23:00",
+        "end": "01:30"
+      }
+    },
+    {
+      "id": "reset",
+      "label": "Reset",
+      "host": "mit wechselnden Commander:innen",
+      "glyph": "☀️",
+      "accent": "#f0b429",
+      "note": "Resettraid mit wechselnden Commander:innen.",
+      "match": ["reset", "kommi"],
+      "baseline": {
+        "days": ["FR"],
+        "start": "20:00",
+        "end": "23:30"
+      }
+    },
+    {
+      "id": "monthly",
+      "label": "Monatlich",
+      "host": "neu in der Community?",
+      "glyph": "🚀",
+      "accent": "#3038a3",
+      "note": "Kennenlernraid mit vielen Aktionen.",
+      "match": ["speed.?dating", "starter"],
+      "baseline": {
+        "days": ["Sa"],
+        "start": "17:00",
+        "end": "18:00"
+      }
+    }
+  ],
+
+  "_assignments_hinweis": [
+    "Feste Zuordnung Discord-Event -> Spur. 'match' ist ein Regex auf Name,",
+    "Beschreibung und Ort (Gross-/Kleinschreibung egal), 'id' die Event-ID.",
+    "'end' ist optional und eine Uhrzeit, keine Dauer: sie greift nur, wenn",
+    "Discord beim Termin keine Endzeit hinterlegt hat, und schlägt dann die",
+    "Grundzeile. Beispiel:",
+    "{ \"match\": \"Speed.?Dating\", \"lane\": \"public\", \"end\": \"19:00\" }"
+  ],
+  "assignments": [
+    
+    { "match": "Speed.?Dating", "lane": "monthly" ,"end": "21:00" }
+  ]
+}

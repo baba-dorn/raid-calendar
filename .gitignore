@@ -1,5 +1,6 @@
 node_modules/
 .env
 *.log
+*.err
 .DS_Store
 demo_banner/
