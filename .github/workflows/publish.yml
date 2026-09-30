@@ -1,0 +1,75 @@
+name: Wochenplan veröffentlichen
+
+# GitHub Pages kann nur Dateien ausliefern, kein Node. Deshalb holt dieser Lauf
+# die Termine aus Discord, legt sie als statische Dateien ab und veröffentlicht
+# `public/` – alle sechs Stunden, damit eine kurzfristig angesetzte Raid auch
+# ohne Zutun von jemandem auftaucht.
+on:
+  schedule:
+    # stdCron kennt keine Stundenliste; "*/6" ist der übliche Weg.
+    - cron: '17 */6 * * *'
+  workflow_dispatch: # auf Zuruf, z. B. wenn ein Raid kurzfristig geändert wurde
+  push:
+    branches: [main]
+    paths:
+      - 'public/**'
+      - 'src/**'
+      - 'server.js'
+      - '.github/workflows/publish.yml'
+
+# Eine spätere Planung bricht frühere Läufe ab – der Token wird sonst im
+# Sekundentakt verbraucht, weil GitHub nach 60 Minuten wartet.
+concurrency:
+  group: publish-pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  TIMEZONE: Europe/Berlin
+  WEEKS_BACK: '2'
+  WEEKS_FORWARD: '8'
+
+jobs:
+  veroeffentlichen:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/configure-pages@v5
+
+      # Ohne Token schreibt das Skript Demo-Daten und veröffentlicht sie
+      # unbemerkt. Das ist der teuerste Fehler in diesem Lauf, deshalb bricht
+      # er hier ab, statt eine Woche voller erfundener Raids online zu stellen.
+      - name: Discord-Zugang prüfen
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+        run: |
+          if [ -z "$DISCORD_TOKEN" ] || [ -z "$DISCORD_GUILD_ID" ]; then
+            echo "::error::DISCORD_TOKEN und DISCORD_GUILD_ID müssen als Repository-Secret gesetzt sein."
+            exit 1
+          fi
+
+      - name: Wochen als Dateien erzeugen
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+        run: node tools/snapshot.mjs
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

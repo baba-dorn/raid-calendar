@@ -4,3 +4,8 @@ node_modules/
 *.err
 .DS_Store
 demo_banner/
+
+# Von `tools/snapshot.mjs` erzeugt und von der GitHub-Action frisch ins
+# Deployment gelegt. Läge es im Repo, schleicht sich beim lokalen Testlauf
+# leicht eine Woche Demo-Daten in die Seite, die dann veröffentlicht wird.
+public/data/

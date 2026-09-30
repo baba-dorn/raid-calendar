@@ -27,6 +27,10 @@ const state = {
   timezone: null,
   data: null,
   accentById: new Map(),
+  /** `file` = statische Datei (GitHub Pages), `api` = laufender Server. */
+  source: null,
+  /** Vorhandene Wochenstarts bei statischer Auslieferung, sonst null. */
+  weeks: null,
 };
 
 const MINUTES_PER_DAY = 1440;
@@ -992,10 +996,15 @@ function renderBoard(week) {
         el('span', 'board-empty-note', `Technisch: ${week.meta.error ?? ''}`),
       );
       const link = el('a', 'board-empty-link', 'Diagnose öffnen');
-      link.href = '/api/health';
-      link.target = '_blank';
-      link.rel = 'noopener';
-      empty.append(link);
+      // Nur sinnvoll, wenn es überhaupt einen Server gibt. Auf GitHub Pages
+      // gibt es `/api/health` nicht, und ein Link ins Nichts ist schlimmer
+      // als gar keiner.
+      if (state.source !== 'file') {
+        link.href = '/api/health';
+        link.target = '_blank';
+        link.rel = 'noopener';
+        empty.append(link);
+      }
     } else {
       empty.textContent = 'Für diese Woche sind in Discord keine Events eingetragen.';
     }
@@ -1392,6 +1401,51 @@ function setStatus(text, stateName = 'ok') {
   els.status.dataset.state = stateName;
 }
 
+/**
+ * Holt die Wochen. Auf GitHub Pages gibt es keinen Server, dort liegen die
+ * Wochen als Dateien unter `data/` (siehe `tools/snapshot.mjs`). Läuft die Seite
+ * lokal ohne diese Dateien, antwortet `/api/week` – dieselbe `public/`-Mappe
+ * taugt also für beides, und es braucht keinen Build-Schritt.
+ *
+ * Der Name der Datei *ist* der Wochenstart. Was nicht da ist, wurde entweder
+ * noch nicht erzeugt oder liegt hinter dem Horizont des Schnappschusses.
+ */
+async function fetchWeek(params) {
+  const wanted = state.weekStart ? `data/${state.weekStart}.json` : 'data/latest.json';
+  try {
+    const file = await fetch(`${wanted}?${params}`);
+    if (file.ok) {
+      state.source = 'file';
+      await loadWeekIndex();
+      return await file.json();
+    }
+  } catch {
+    /* Keine Datei, kein Server – gleich der nächste Versuch. */
+  }
+
+  state.source = 'api';
+  state.weeks = null;
+  els.prevWeek.disabled = false;
+  els.nextWeek.disabled = false;
+  const response = await fetch(`/api/week?${params}`);
+  if (!response.ok) throw new Error(`Server antwortete ${response.status}`);
+  return response.json();
+}
+
+/** Liest die Liste der erzeugten Wochen, damit die Pfeile einen Endpunkt haben. */
+async function loadWeekIndex() {
+  if (state.weeks) return;
+  try {
+    const index = await fetch('data/index.json');
+    if (index.ok) {
+      const body = await index.json();
+      state.weeks = Array.isArray(body.weeks) ? body.weeks : null;
+    }
+  } catch {
+    /* Ohne Liste bleiben die Pfeile frei – dann eben ein 404 im Statusfeld. */
+  }
+}
+
 async function loadWeek() {
   setStatus('Lade Termine …', 'loading');
   const params = new URLSearchParams();
@@ -1399,19 +1453,30 @@ async function loadWeek() {
   if (state.timezone) params.set('tz', state.timezone);
 
   try {
-    const response = await fetch(`/api/week?${params}`);
-    if (!response.ok) throw new Error(`Server antwortete ${response.status}`);
-    const week = await response.json();
+    const week = await fetchWeek(params);
 
     state.weekStart = week.weekStart;
     state.timezone = week.timezone;
     els.timezone.value = week.timezone;
     render(week);
 
+    // Ohne Server lässt sich die Zeitzone nicht umrechnen – der Schnitt ist im
+    // Schnappschuss für *eine* Zone erzeugt. Ein Auswahlfeld, das beim Wechsel
+    // zurückspringt, wäre schlimmer als keines: Es verspricht etwas, das hier
+    // nicht stattfindet.
+    fillTimezones(week.timezone, state.source === 'file');
+    els.timezone.disabled = state.source === 'file';
+    if (state.source === 'file') {
+      els.timezone.title = `Feste Schnitte in ${week.timezone} – die Dateien werden alle sechs Stunden neu erzeugt.`;
+    } else {
+      els.timezone.removeAttribute('title');
+    }
+
     const note = week.meta?.stale
       ? `Stand ${new Date(week.meta.fetchedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (veraltet)`
       : `Stand ${new Date(week.generatedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
     setStatus(week.meta?.error ? `Fehler: ${week.meta.error}` : note, week.meta?.error ? 'error' : 'ok');
+    updateNavButtons();
   } catch (error) {
     // Sichtbar für den Nutzer *und* in der Konsole – sonst bleibt ein Fehler
     // wie „Invalid time value“ ohne Spur.
@@ -1420,14 +1485,15 @@ async function loadWeek() {
   }
 }
 
-function fillTimezones(selected) {
+function fillTimezones(selected, nurDiese = false) {
   let zones = [];
   try {
     zones = Intl.supportedValuesOf('timeZone');
   } catch {
     zones = ['UTC', 'Europe/Berlin', 'Europe/Vienna', 'Europe/Zurich', 'America/New_York', 'Asia/Tokyo'];
   }
-  if (selected && !zones.includes(selected)) zones = [selected, ...zones];
+  if (nurDiese) zones = [selected];
+  else if (selected && !zones.includes(selected)) zones = [selected, ...zones];
   els.timezone.replaceChildren();
   for (const zone of zones) {
     const option = document.createElement('option');
@@ -1436,6 +1502,25 @@ function fillTimezones(selected) {
     if (zone === selected) option.selected = true;
     els.timezone.append(option);
   }
+}
+
+/**
+ * Setzt die Pfeile an den Rändern des erzeugten Bereichs auf „nicht mehr“.
+ * Ohne das endet der Klick auf eine nicht vorhandene Datei und die Seite
+ * meldet „Server antwortete 404“ – auf GitHub Pages gibt es keinen Server,
+ * die Meldung wäre doppelt falsch. Bei lokalem Betrieb bleibt die Liste leer,
+ * dann darf weitergeblättert werden.
+ */
+function updateNavButtons() {
+  const weeks = state.weeks;
+  if (!weeks || !weeks.length) {
+    els.prevWeek.disabled = false;
+    els.nextWeek.disabled = false;
+    return;
+  }
+  const index = weeks.indexOf(state.weekStart);
+  els.prevWeek.disabled = index <= 0;
+  els.nextWeek.disabled = index < 0 || index >= weeks.length - 1;
 }
 
 els.prevWeek.addEventListener('click', () => {

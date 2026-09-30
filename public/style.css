@@ -52,7 +52,10 @@ body {
     radial-gradient(1200px 700px at 15% -10%, rgba(168, 85, 247, 0.16), transparent 60%),
     radial-gradient(900px 600px at 105% 15%, rgba(224, 165, 74, 0.12), transparent 55%),
     linear-gradient(180deg, var(--scrim-top), var(--scrim-bottom) 60%),
-    url("/raid-calendar-bg.png");
+    /* Ohne führenden Schrägstrich: Die Seite liegt auf GitHub Pages unter
+     * /raid-calendar/, und "/raid-calendar-bg.png" würde dort im Repo-Root
+     * landen. Lokal ist "./" genau dasselbe wie "/". */
+    url("./raid-calendar-bg.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
