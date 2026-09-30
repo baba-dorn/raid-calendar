@@ -6,8 +6,11 @@ name: Wochenplan veröffentlichen
 # ohne Zutun von jemandem auftaucht.
 on:
   schedule:
-    # stdCron kennt keine Stundenliste; "*/6" ist der übliche Weg.
-    - cron: '17 */6 * * *'
+    # Alle Viertelstunde – nicht auf :00. GitHub stellt planmäßige Läufe, die
+    # auf volle Stunde fallen, bewusst hinten an, weil dann alles gleichzeitig
+    # startet. Mit dem Versatz von sieben Minuten steht der Plan trotzdem
+    # zuverlässig, und :00 bleibt für die Läufe anderer Repos frei.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch: # auf Zuruf, z. B. wenn ein Raid kurzfristig geändert wurde
   push:
     branches: [main]
@@ -35,10 +38,18 @@ permissions:
   pages: write
   id-token: write
 
-env:
-  TIMEZONE: Europe/Berlin
-  WEEKS_BACK: '2'
-  WEEKS_FORWARD: '8'
+  # Alle Viertelstunde ist das häufigste, was sinnvoll ist: GitHub stellt
+  # Zeitpläne nachgelagert, und unter etwa fünf Minuten sind sie unzuverlässig.
+  # Öffentliche Repos zahlen Standard-Runner frei, die 96 Läufe am Tag kosten
+  # also nichts. Die Workflow-Läufe sind auch nicht teuer für Besucher: Ein
+  # erneutes Deployment ändert `app.js`, `style.css` und das 2-MB-Bild nicht
+  # an, ihre ETags bleiben gleich, und der Browser beantwortet die Nachfrage mit
+  # 304, ohne einen Byte neu zu holen. Wirklich frisch ist nur die kleine
+  # Datendatei, und die holt sich die Seite ohnehin nur, wenn sie sich ändert.
+  env:
+    TIMEZONE: Europe/Berlin
+    WEEKS_BACK: '2'
+    WEEKS_FORWARD: '8'
 
 jobs:
   veroeffentlichen:

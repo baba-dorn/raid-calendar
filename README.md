@@ -475,11 +475,38 @@ ohne dass irgendwo ein Fehler steht. Deshalb sind alle Pfade relativ
    `.env`. Der Workflow bricht ab, wenn sie fehlen, statt stillschweigend eine
    Woche **Demo-Daten** zu veröffentlichen.
 
-Danach läuft `.github/workflows/publish.yml` alle sechs Stunden sowie bei
+Danach läuft `.github/workflows/publish.yml` alle Viertelstunde sowie bei
 jedem Push auf `main` und auf Zuruf (*Run workflow*). Ein Lauf dauert
-wenige Sekunden. GitHub stellt nachgelagerte Läufe bis zu einer Stunde
-zurück; `concurrency` bricht den Vorlauf ab, damit der Token nicht
-unnötig verbraucht wird.
+wenige Sekunden. `concurrency` bricht den Vorlauf ab, damit ein überholter
+Lauf nicht den Token verbraucht.
+
+### Wie schnell eine neue Raid auftaucht
+
+GitHub Pages **pollt nichts**. Dort läuft kein Code, es werden nur Dateien
+ausgeliefert – wer an Discord etwas einträgt, meldet das der Seite nicht. Der
+einzige Weg ist der Workflow, und der läuft alle 15 Minuten. Das ist der
+übliche Kompromiss: GitHub stellt Zeitpläne nachgelagert ein, alles unter
+etwa fünf Minuten ist unzuverlässig, und schneller gäbe es nur mit einem
+eigenen Server, der dauerhaft läuft.
+
+Die Seite prüft selbst nach: Alle fünf Minuten fragt sie `data/latest.json`
+ab, und **nur wenn sich der Erzeugungszeitpunkt geändert hat**, wird neu
+gerendert. Beim Zurückholen eines Tabs aus dem Hintergrund passiert das
+sofort. Ohne diese Prüfung stünde ein Tab, den jemand den ganzen Tag offen
+lässt, auf dem Stand von heute Morgen – das Neuladen wäre der einzige Weg,
+und das macht niemand.
+
+Der Takt ist weder teuer für dich noch für Besucher: Ein öffentliches Repo
+rechnet Standard-Runner umsonst ab, die 96 Läufe am Tag also gratis. Und ein
+erneutes Deployment ändert `app.js`, `style.css` und das 2-MB-Bild nicht an,
+ihre ETags bleiben gleich, der Browser beantwortet die Nachfrage mit 304,
+ohne einen Byte neu zu holen. Neu geladen wird wirklich nur die kleine
+Datendatei – und die holt sich die Seite ohnehin nur, wenn sich etwas geändert
+hat.
+
+Der Zeitplan steht bewusst auf `:07 :22 :37 :52` und nicht auf `:00`: GitHub
+stellt Läufe, die auf die volle Stunde fallen, hinten an, weil dort alles
+gleichzeitig startet.
 
 ### Was sich auf Pages ändert
 

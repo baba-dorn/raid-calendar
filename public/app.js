@@ -31,6 +31,8 @@ const state = {
   source: null,
   /** Vorhandene Wochenstarts bei statischer Auslieferung, sonst null. */
   weeks: null,
+  /** Wann der gerade gezeigte Schnappschuss erzeugt wurde. */
+  generatedAt: null,
 };
 
 const MINUTES_PER_DAY = 1440;
@@ -356,7 +358,24 @@ function buildTimeAxis(week) {
     return y;
   };
 
-  return { yAt, segments, total: y, from, to };
+  /**
+   * Umkehrung von `yAt`. Nötig, weil eine Karte ihre Mindesthöhe über ihre Endzeit
+   * hinaus einnimmt: Ein Termin von 30 Minuten wird 46 Pixel hoch gezeichnet,
+   * damit noch ein Titel hineinpasst. Für die Grundlinie darunter zählt aber,
+   * wo die Karte *wirklich* aufhört – und das lässt sich nur in Pixeln rechnen.
+   */
+  const minuteAt = (pixel) => {
+    const p = Math.min(Math.max(pixel, 0), y);
+    for (const segment of segments) {
+      if (p <= segment.top + segment.height) {
+        if (segment.height <= 0) return segment.from;
+        return segment.from + ((p - segment.top) / segment.height) * (segment.to - segment.from);
+      }
+    }
+    return to;
+  };
+
+  return { yAt, minuteAt, segments, total: y, from, to };
 }
 
 /** Absolute Endzeit eines Termins – 1:30 am Folgetag heißt 1530. */
@@ -1092,6 +1111,26 @@ function renderBoard(week) {
       bands.push(...freeBands(lane, day.occurrences));
     }
 
+    // `freeBands` kürzt nach Uhrzeit. Die Karten aber werden mindestens
+    // `MIN_CARD_HEIGHT` hoch gezeichnet, damit ein kurzer Termin überhaupt einen
+    // Titel trägt – und ragen dabei über ihre Endzeit hinaus. Ein 30-Minuten-
+    // Termin ist dadurch eine Stunde hoch und schöbe sonst in den Streifen
+    // darunter. Also weicht der Streifen, nicht der Termin: Die Karten haben
+    // Vorrang, das ist der ganze Sinn der Zwei-Stufen-Lage.
+    const belegung = cards.map((item) => {
+      const top = axis.yAt(item.entry.startMinute);
+      return [top, top + Math.max(axis.yAt(spanEndMinutes(item.entry)) - top, MIN_CARD_HEIGHT)];
+    });
+    for (const band of bands) {
+      let y = axis.yAt(band.from);
+      for (const [oben, unten] of belegung) {
+        if (unten <= y + 0.5) continue;
+        if (oben < y + 0.5) y = unten;
+      }
+      const echterStart = axis.minuteAt(y);
+      if (echterStart < band.to - 0.5) band.from = echterStart;
+    }
+
     for (const item of cards) {
       const built = renderCard(item, day, axis, roomBelow(item, cards, bands, axis, height));
       column.append(built.card);
@@ -1402,15 +1441,43 @@ function setStatus(text, stateName = 'ok') {
 }
 
 /**
- * Holt die Wochen. Auf GitHub Pages gibt es keinen Server, dort liegen die
- * Wochen als Dateien unter `data/` (siehe `tools/snapshot.mjs`). Läuft die Seite
- * lokal ohne diese Dateien, antwortet `/api/week` – dieselbe `public/`-Mappe
- * taugt also für beides, und es braucht keinen Build-Schritt.
+ * Holt die Wochen – erst beim Server, dann aus der Datei.
  *
- * Der Name der Datei *ist* der Wochenstart. Was nicht da ist, wurde entweder
- * noch nicht erzeugt oder liegt hinter dem Horizont des Schnappschusses.
+ * Auf GitHub Pages gibt es keinen Server, dort liegen die Wochen als Dateien
+ * unter `data/` (siehe `tools/snapshot.mjs`). Dieselbe `public/`-Mappe läuft also
+ * für beides, ohne dass ein Build-Schritt irgendetwas umschreibt.
+ *
+ * Die Reihenfolge ist Absicht und war zunächst verkehrt herum: Liegt eine
+ * `public/data/`-Mappe im Arbeitsverzeichnis – etwa weil jemand lokal
+ * `npm run snapshot` gelaufen hat –, dann *verdrängt* sie den laufenden Server.
+ * Man sähe eine Woche voller Demo-Termine und griffe beim Nachfragen auf
+ * `/api/week` doch wieder auf die echten zu. Wer eine schnellere Quelle hat,
+ * muss sie zuerst nehmen; die Dateien sind der Ersatz, nicht das Ziel.
+ *
+ * `null` heißt „unbekannt“. Nach dem ersten 404 weiß die Seite, dass es keine
+ * gibt, und fragt nicht bei jedem Blättern erneut – auf Pages ist der Fehlversuch
+ * also einmal pro Sitzung, nicht einmal je Woche.
  */
+let apiVorhanden = null;
+
 async function fetchWeek(params) {
+  if (apiVorhanden !== false) {
+    try {
+      const response = await fetch(`/api/week?${params}`);
+      if (response.ok) {
+        apiVorhanden = true;
+        state.source = 'api';
+        state.weeks = null;
+        els.prevWeek.disabled = false;
+        els.nextWeek.disabled = false;
+        return await response.json();
+      }
+      if (response.status === 404) apiVorhanden = false;
+    } catch {
+      apiVorhanden = false;
+    }
+  }
+
   const wanted = state.weekStart ? `data/${state.weekStart}.json` : 'data/latest.json';
   try {
     const file = await fetch(`${wanted}?${params}`);
@@ -1420,16 +1487,12 @@ async function fetchWeek(params) {
       return await file.json();
     }
   } catch {
-    /* Keine Datei, kein Server – gleich der nächste Versuch. */
+    /* Weder Server noch Datei – gleich der Fehler unten. */
   }
 
-  state.source = 'api';
-  state.weeks = null;
-  els.prevWeek.disabled = false;
-  els.nextWeek.disabled = false;
-  const response = await fetch(`/api/week?${params}`);
-  if (!response.ok) throw new Error(`Server antwortete ${response.status}`);
-  return response.json();
+  throw new Error(apiVorhanden === false
+    ? 'Keine Datei für diese Woche vorhanden'
+    : 'Server nicht erreichbar und keine Datei vorhanden');
 }
 
 /** Liest die Liste der erzeugten Wochen, damit die Pfeile einen Endpunkt haben. */
@@ -1457,6 +1520,9 @@ async function loadWeek() {
 
     state.weekStart = week.weekStart;
     state.timezone = week.timezone;
+    // Zeitpunkt dieses Schnappschusses. `watchForFreshData` vergleicht ihn mit
+    // dem von `data/latest.json` und weiß so, ob sich etwas getan hat.
+    state.generatedAt = week.generatedAt ?? null;
     els.timezone.value = week.timezone;
     render(week);
 
@@ -1548,6 +1614,43 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowRight') els.nextWeek.click();
 });
 
+/**
+ * Bei statischer Auslieferung prüft die Seite selbst, ob ein neuer Schnappschuss
+ * da ist. Ohne das bliebe ein Tab, den jemand den ganzen Tag offen lässt, auf
+ * dem Stand von heute Morgen stehen – nach dem Neuladen wäre plötzlich ein Raid
+ * da, den vorher niemand gesehen hat. Beim lokalen Betrieb gibt es dafür nichts
+ * zu tun: Der Server holt ohnehin bei jedem Aufruf frisch.
+ */
+async function watchForFreshData() {
+  if (state.source !== 'file' || document.hidden) return;
+  try {
+    // `no-cache` ist hier entscheidend: Ohne das antwortet der Browser bis zu
+    // zehn Minuten lang aus dem eigenen Cache, und die Prüfung bemerkt einen
+    // neuen Schnappschuss erst dann, wenn jemand die Seite neu lädt. Die
+    // Anfrage ist winzig und wird bei Unverändertheit mit 304 beantwortet.
+    const probe = await fetch('data/latest.json', { cache: 'no-cache' });
+    if (!probe.ok) return;
+    const body = await probe.json();
+    if (!body.generatedAt || body.generatedAt === state.generatedAt) return;
+
+    state.generatedAt = body.generatedAt;
+    if (!state.weekStart || state.weekStart === body.weekStart) {
+      await loadWeek();
+    } else {
+      // Der Betrachter blättert gerade in einer anderen Woche. Ihn ungefragt
+      // dorthin zu ziehen, wäre eine Überraschung – der Hinweis reicht.
+      setStatus('Neuere Daten verfügbar – „Diese Woche" holt sie');
+    }
+  } catch {
+    /* Kein Netz oder Seite im Übergang – beim nächsten Mal wieder. */
+  }
+}
+
 fillTimezones(state.timezone);
 loadWeek();
-setInterval(loadWeek, 5 * 60_000);
+setInterval(watchForFreshData, 5 * 60_000);
+// Wer den Tab aus dem Hintergrund zurückholt, soll nicht bis zum nächsten
+// Fünf-Minuten-Takt warten.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) watchForFreshData();
+});
