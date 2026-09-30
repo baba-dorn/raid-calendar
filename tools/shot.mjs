@@ -108,6 +108,15 @@ const clip = clipSpec
   : undefined;
 
 const shot = await send('Page.captureScreenshot', { format: 'png', ...(clip ? { clip } : {}) });
+// Ohne diese Zeile kam bei einem fehlgeschlagenen Aufruf nur
+// "Cannot read properties of undefined" – die eigentliche Ursache stand
+// nirgends, weil die Antwort ein Fehlerobjekt statt eines Ergebnisses ist.
+if (shot.error) {
+  console.error('captureScreenshot:', shot.error.message ?? JSON.stringify(shot.error));
+  ws.close();
+  chrome.kill();
+  process.exit(1);
+}
 writeFileSync(target, Buffer.from(shot.result.data, 'base64'));
 console.log(`geschrieben: ${target}`);
 

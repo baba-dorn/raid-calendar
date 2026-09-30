@@ -204,6 +204,17 @@ public/app.js       Zeitachse (stückweise linear), Tagesspalten, Karten
 
 ## Besonderheiten
 
+- **Das Hintergrundbild ist ein Raum, kein Inhalt.** `public/raid-calendar-bg.png`
+  liegt hinter allem, durch einen Schleier aus zwei dunklen Farbverläufen
+  (`--scrim-top` / `--scrim-bottom`). Der Schleier ist nicht Geschmack, sondern
+  die Bedingung dafür, dass Text lesbar bleibt: Ohne ihn läge Weiß auf dem hellen
+  Violett oben links. Er ist mit **0,52 / 0,68** bewusst schwach gehalten –
+  das Bild ist an den Rändern zu sehen, wo kein Text steht, und sonst nirgends.
+  **Die großen Flächen sind deckend, nicht transparent.** Markenspalte, Brett und
+  Legende mischen gegen `--surface-solid` statt gegen `transparent`; sonst
+  schiene das Bild durch sie und die Schrift stünde auf einem Streifen Kunst.
+  Dasselbe gilt für die Karten: Sie mischen gegen `--board`, damit die
+  Stundenlinien an der Kartenkante enden statt hindurchzulaufen.
 - **Die Zeitachse ist stückweise linear.** Belegte Zeit (Events und Slots, auf
   irgendeinem Tag) behält ihre echte Länge. Alles Dazwischen wird auf 30 %
   zusammengedrückt und verliert seine Rasterlinien – dort steht nichts, also
@@ -392,6 +403,39 @@ Zwei Fehler sind nur dort aufgefallen und in den echten Wochen nie:
 ```powershell
 node tools/shot.mjs http://127.0.0.1:3000/ tools/stress.png 1540 757 @tools/stress-week.js 0
 ```
+
+`tools/contrast-check.mjs` ist kein Seiten-Ausdruck, sondern ein eigenes
+Werkzeug. Es prüft, ob Text auf dem Hintergrundbild noch lesbar ist – und zwar
+**an den Pixeln, die Chrome wirklich malt**, nicht nachgerechnet aus dem
+Stylesheet. Zwei Durchgänge derselben Seite: einmal normal, um Rect und
+Schriftfarbe zu holen, einmal mit unsichtbarem Text. Was übrig bleibt, ist genau
+das, was hinter der Schrift liegt, und wird als Hintergrundfarbe gewertet.
+
+```powershell
+node tools/contrast-check.mjs                                  # Standardansicht
+node tools/contrast-check.mjs http://127.0.0.1:3000/ 1540 1000 --vergleich
+node tools/contrast-check.mjs --keep    # legt contrast-bg.png ab, die gemessene Fläche
+```
+
+`--vergleich` misst dieselben Stellen noch einmal **ohne** Hintergrundbild und
+stellt die Werte daneben. Damit lässt sich die Frage beantworten, ob das Bild
+überhaupt Kontrast kostet – aktuell höchstens 1,2 Stufen, und der engste Wert
+liegt bei 4,9:1 gegen 4,5:1 Schwelle.
+
+Drei Fehler stecken in diesem Werkzeug und sind typisch für selbstgebaute
+Messungen; sie seien hier genannt, weil sie das Ergebnis verfälscht haben:
+
+- **Nicht den Elementkasten messen.** Ein `.legend-item` enthält den farbigen
+  Punkt; misst man den ganzen Kasten, landet der Punkt darin und die Schrift
+  gilt als unlesbar (1,1:1), obwohl über ihr Schwarz steht. Gemessen wird die
+  Zeile, über einen `Range` um den Textknoten.
+- **Text, der als Verlauf gefüllt ist**, steckt im *Hintergrund* des Elements
+  (`background-clip: text`). Ein transparentes `color` löscht ihn nicht – er
+  läge als Hintergrundfarbe in exakt der Schriftfarbe da. Im Vergleichslauf
+  wird er deshalb weggenommen.
+- **`color-mix` liefert `color(srgb 0.46 0.48 0.76)`** mit Anteilen von 0 bis 1.
+  Als 8-Bit gelesen ist 0,46 fast Schwarz, und eine helle Schrift sieht
+  unsichtbar aus. Der Farbparser prüft deshalb die Schreibweise.
 
 ## Optional: Live statt pollen
 
