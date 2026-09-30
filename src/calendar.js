@@ -74,6 +74,7 @@ export function buildWeek({ events, guild, requestedStart, timezone, weekStartsO
         entityType: event.entityType,
         location: event.location,
         image: event.image,
+        imageSmall: event.imageSmall,
         userCount: event.userCount,
         url: event.url,
         channelUrl: event.channelUrl,

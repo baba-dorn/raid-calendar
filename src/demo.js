@@ -32,6 +32,7 @@ export function buildDemoEvents(guildId, timeZone, now = new Date()) {
     channelUrl: null,
     location: null,
     image: null,
+    imageSmall: null,
     userCount: null,
     endIsEstimated: false,
     recurrence: null,

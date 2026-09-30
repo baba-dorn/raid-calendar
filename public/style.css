@@ -365,8 +365,8 @@ select {
   position: absolute;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 10px;
+  padding: 8px 12px;
   border-radius: var(--radius);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-left: 3px solid var(--accent);
@@ -396,26 +396,39 @@ select {
   padding: 14px 18px;
 }
 
-.block--compact {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 8px 10px;
-}
-
 .block--active {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
-.block-icon {
-  font-size: 24px;
-  line-height: 1;
-  flex: 0 0 auto;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+/* Statt eines Zählers signalisiert ein Punkt an der Zeitleiste, dass der
+   Termin gerade läuft – ohne Platz für eine eigene Badge-Zeile. */
+.block--active .block-time::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 70%, transparent);
+  vertical-align: middle;
 }
 
-.block--compact .block-icon {
-  font-size: 18px;
+/* Event-Cover ersetzt das frühere Entity-Icon und belegt dieselbe Spalte. */
+.block-cover {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--panel-strong);
+}
+
+.block--span .block-cover {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
 }
 
 .block-text {
@@ -435,14 +448,30 @@ select {
   text-overflow: ellipsis;
 }
 
-.block-title {
+/* Rhythmus als eigene Meta-Zeile, nur wenn der Block hoch genug dafür ist. */
+.block-rhythm {
   display: block;
-  font-size: 14.5px;
+  margin-top: 3px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.block-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .block--span .block-title {
@@ -451,32 +480,6 @@ select {
   font-style: italic;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-}
-
-.block-note {
-  display: block;
-  font-size: 12px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.block-badge {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-  opacity: 0.85;
-}
-
-.block--span .block-badge {
-  top: 8px;
-  right: 14px;
 }
 
 .block-empty {
@@ -665,6 +668,12 @@ select {
   border-top: 1px solid var(--line);
   color: #cfc9e2;
   white-space: pre-wrap;
+}
+
+.detail-footnote {
+  margin: 18px 0 0;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .detail-actions {

@@ -107,6 +107,10 @@ public/app.js       Wochenraster, durchgehende Blöcke für tägliche Events
   ausgewiesen.
 - **Ausfall** – Schlägt ein Discord-Abruf fehl, liefert der Server den letzten
   Stand weiter und markiert ihn in der Kopfzeile als *veraltet*.
+- **Covers** – Hat ein Event ein Bild, liefert `src/discord.js` zwei CDN-URLs:
+  `image` (640 px) für das Detailpanel und `imageSmall` (160 px) für das
+  Thumbnail im Kalenderblock. Ohne Bild bleibt die Icon-Spalte leer – ein
+  Emoji-Icon wurde entfernt, weil es bei Voice-Events immer gleich aussieht.
 
 ## Fehlersuche
 
@@ -122,6 +126,19 @@ passende Einladungs-URL:
 
 Die Liste `guilds` zeigt, in welchen Servern der Bot tatsächlich Mitglied ist –
 nützlich, wenn versehentlich die falsche Server-ID in der `.env` steht.
+
+## Werkzeuge
+
+`tools/shot.mjs` legt einen Screenshot der laufenden Seite ab – praktisch, um
+Layout-Änderungen zu prüfen, ohne npm-Abhängigkeiten:
+
+```bash
+node tools/shot.mjs http://127.0.0.1:3000/ shot.png 1847 987
+```
+
+Optionale Argumente: Breite, Höhe, ein JavaScript-Ausdruck (wird nach dem Laden
+ausgeführt, z. B. `document.querySelector('.block').click()`) und ein
+Ausschnitt `x,y,b,h,skalierung`.
 
 ## Optional: Live statt pollen
 

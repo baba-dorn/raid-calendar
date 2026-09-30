@@ -77,6 +77,11 @@ export function normalizeEvent(raw, { guildId, defaultDurationMinutes }) {
     ? `${CDN}/guild-events/${raw.id}/${raw.image}.png?size=640`
     : null;
 
+  /** Kleine Variante für das Thumbnail im Kalenderblock (ca. 15 KB statt 250 KB). */
+  const imageSmall = raw.image
+    ? `${CDN}/guild-events/${raw.id}/${raw.image}.png?size=160`
+    : null;
+
   return {
     id: raw.id,
     guildId: raw.guild_id ?? guildId,
@@ -90,6 +95,7 @@ export function normalizeEvent(raw, { guildId, defaultDurationMinutes }) {
     channelId: raw.channel_id ?? null,
     location: raw.entity_metadata?.location ?? null,
     image,
+    imageSmall,
     userCount: Number.isInteger(raw.user_count) ? raw.user_count : null,
     url: `https://discord.com/events/${guildId}/${raw.id}`,
     channelUrl: raw.channel_id ? `https://discord.com/channels/${guildId}/${raw.channel_id}` : null,

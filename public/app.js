@@ -30,7 +30,8 @@ const state = {
 
 const PX_PER_MIN = 46 / 60;
 const LANE_PADDING = 4;
-const MIN_BLOCK_HEIGHT = { span: 66, day: 46 };
+/** Kleinste sinnvolle Blockhöhe: Deckblatt (34 px) plus zweizeilige Beschriftung. */
+const MIN_BLOCK_HEIGHT = { span: 72, day: 54 };
 
 const ENTITY_META = {
   VOICE: { label: 'Voice-Event', glyph: '🔊', hues: [268, 250, 210, 190] },
@@ -59,6 +60,15 @@ function timeRange(block) {
   const end = block.spansNextDay ? block.endClockMinute : block.endMinute;
   const suffix = block.spansNextDay ? ' Uhr (+1 Tag)' : ' Uhr';
   return `${clock(block.startMinute)} – ${clock(end)}${suffix}`;
+}
+
+/**
+ * Kompakte Variante für den Block: ohne "Uhr". In einer Sieben-Tage-Spalte
+ * ist jedes Zeichen zaehlbar, die Endzeit darf nicht abgeschnitten werden.
+ */
+function shortRange(block) {
+  const end = block.spansNextDay ? block.endClockMinute : block.endMinute;
+  return `${clock(block.startMinute)} – ${clock(end)}${block.spansNextDay ? ' (+1)' : ''}`;
 }
 
 const MONTH_NAMES = [
@@ -120,12 +130,7 @@ function rhythmLabel(block) {
   }
 }
 
-/** Oberzeile eines Blocks: Rhythmus, wenn vorhanden – sonst die Uhrzeit. */
-function blockTimeLine(block) {
-  const rhythm = rhythmLabel(block);
-  return rhythm ? `${rhythm} · ${timeRange(block)}` : timeRange(block);
-}
-
+/** Feste Akzentfarbe je Event, damit die Blöcke wochenuebergreifend gleich bleiben. */
 function accentFor(eventId, entityType) {
   if (state.accentById.has(eventId)) return state.accentById.get(eventId);
   const hues = ENTITY_META[entityType]?.hues ?? [270];
@@ -134,13 +139,6 @@ function accentFor(eventId, entityType) {
   const value = `hsl(${hues[hash % hues.length]} 74% 63%)`;
   state.accentById.set(eventId, value);
   return value;
-}
-
-function firstSentence(text) {
-  if (!text) return null;
-  const trimmed = text.trim().split(/\s+/).join(' ');
-  const cut = trimmed.search(/[.!?](\s|$)/);
-  return cut > 0 ? trimmed.slice(0, cut + 1) : trimmed.slice(0, 90);
 }
 
 function shiftWeek(weekStart, weeks) {
@@ -180,6 +178,7 @@ function buildBlocks(week) {
         entityType: first.entityType,
         location: first.location,
         image: first.image,
+        imageSmall: first.imageSmall,
         userCount: first.userCount,
         url: first.url,
         channelUrl: first.channelUrl,
@@ -228,7 +227,10 @@ function assignLanes(blocks) {
  * ------------------------------------------------------------------ */
 
 function renderBlock(block) {
-  const { glyph, title } = splitEmoji(block.name);
+  // Das führende Emoji wird nicht mehr angezeigt: Im Wochenraster ist es bei
+  // Voice-Events immer dasselbe Zeichen und frisst nur Platz. Im Detailpanel
+  // bleibt es erhalten.
+  const { title } = splitEmoji(block.name);
   const accent = accentFor(block.eventId, block.entityType);
   const button = document.createElement('button');
   button.type = 'button';
@@ -241,46 +243,46 @@ function renderBlock(block) {
   }
   if (block.status === 'ACTIVE') button.classList.add('block--active');
 
+  const rhythm = block.alwaysDaily ? null : rhythmLabel(block);
+
+  // Auszeichnung und Ort sind im Block zu kurz; als Tooltip bleiben sie greifbar.
+  button.title = [rhythm, block.name, block.location].filter(Boolean).join(' · ');
+
+  // Oberzeile bleibt die reine Uhrzeit: In einer Sieben-Tage-Spalte passt
+  // daneben nichts mehr, und die Endzeit darf nie abgeschnitten werden.
   const time = document.createElement('span');
   time.className = 'block-time';
-  time.textContent = block.alwaysDaily
-    ? `Täglich ca. ${timeRange(block)}`
-    : blockTimeLine(block);
+  time.textContent = block.alwaysDaily ? `Täglich ca. ${shortRange(block)}` : shortRange(block);
 
   const titleEl = document.createElement('span');
   titleEl.className = 'block-title';
   titleEl.textContent = title;
 
-  const noteText = block.location ?? firstSentence(block.description);
-  let note = null;
-  if (noteText) {
-    note = document.createElement('span');
-    note.className = 'block-note';
-    note.textContent = noteText;
-  }
-
-  const badge = block.userCount !== null && block.userCount !== undefined
-    ? `${block.userCount} dabei`
-    : block.status === 'ACTIVE'
-      ? 'läuft'
-      : null;
-
-  const icon = document.createElement('span');
-  icon.className = 'block-icon';
-  icon.textContent = glyph ?? ENTITY_META[block.entityType]?.glyph ?? '📅';
-
   const text = document.createElement('span');
   text.className = 'block-text';
   text.append(time, titleEl);
-  if (note) text.append(note);
 
-  button.append(icon, text);
-  if (badge) {
-    const badgeEl = document.createElement('span');
-    badgeEl.className = 'block-badge';
-    badgeEl.textContent = badge;
-    button.append(badgeEl);
+  // Der Rhythmus braucht eine eigene, kurze Zeile – die gibt es nur, wenn
+  // der Block hoch genug ist. Sonst wäre in der Spalte nur ein Fragment lesbar.
+  if (rhythm && (block.height ?? 0) >= 78) {
+    const rhythmEl = document.createElement('span');
+    rhythmEl.className = 'block-rhythm';
+    rhythmEl.textContent = rhythm;
+    text.append(rhythmEl);
   }
+
+  // Das Cover ersetzt das frühere Icon: gleicher Platzbedarf, aber es
+  // unterscheidet Events auf einen Blick, wo ein Emoji nichts beiträgt.
+  if (block.imageSmall) {
+    const cover = document.createElement('img');
+    cover.className = 'block-cover';
+    cover.src = block.imageSmall;
+    cover.alt = '';
+    cover.loading = 'lazy';
+    cover.decoding = 'async';
+    button.append(cover);
+  }
+  button.append(text);
 
   button.addEventListener('click', () => openDetail(block));
   return button;
@@ -500,7 +502,7 @@ function openDetail(block) {
       ${block.url ? `<a href="${block.url}" target="_blank" rel="noopener">In Discord öffnen</a>` : ''}
       ${block.channelUrl ? `<a href="${block.channelUrl}" target="_blank" rel="noopener">Zum Kanal</a>` : ''}
     </div>
-    <p class="block-note" style="margin-top:18px">Zeiten in ${escapeHtml(tz ?? '')}${block.endIsEstimated ? ' · Endzeit geschätzt (in Discord nicht gesetzt)' : ''}</p>
+    <p class="detail-footnote">Zeiten in ${escapeHtml(tz ?? '')}${block.endIsEstimated ? ' · Endzeit geschätzt (in Discord nicht gesetzt)' : ''}</p>
   `;
 
   els.detail.dataset.open = 'true';
