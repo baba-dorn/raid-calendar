@@ -437,6 +437,67 @@ Messungen; sie seien hier genannt, weil sie das Ergebnis verfälscht haben:
   Als 8-Bit gelesen ist 0,46 fast Schwarz, und eine helle Schrift sieht
   unsichtbar aus. Der Farbparser prüft deshalb die Schreibweise.
 
+## Veröffentlichen auf GitHub Pages
+
+GitHub Pages liefert **nur Dateien** aus, kein Node. `/api/week` gibt es dort
+also nicht, und die Seite wäre leer. Die Lösung ist nicht ein Umbau des
+Frontends, sondern ein zweiter Weg zu denselben Daten: Dieselbe Pipeline, die
+auch der Server benutzt, läuft **vorab** einmal durch und schreibt ihr Ergebnis
+als Dateien ab.
+
+```
+tools/snapshot.mjs  →  public/data/<wochenstart>.json
+                        public/data/latest.json
+                        public/data/index.json
+```
+
+`app.js` fragt `data/` zuerst ab und fällt auf `/api/week` zurück. Dieselbe
+`public/`-Mappe läuft damit lokal **mit** und auf Pages **ohne** Server, ohne
+dass ein Build-Schritt irgendetwas umschreibt.
+
+```bash
+npm run snapshot     # Wochen als Dateien erzeugen (Demo, wenn kein Token da ist)
+npm run preview      # statisch unter /raid-calendar/ ausliefern, wie Pages
+```
+
+`npm run preview` ist absichtlich strenger als `npm start`: Es liefert unter
+`/raid-calendar/` aus und hat **keine** API. Genau so verhält sich Pages. Ein
+absoluter Pfad wie `/app.js` landet dort im Repo-Root – die Seite bleibt weiß,
+ohne dass irgendwo ein Fehler steht. Deshalb sind alle Pfade relativ
+(`./style.css`, `./app.js`, `./raid-calendar-bg.png`).
+
+### Einrichtung (zwei Handgriffe, beide brauchen Schreibrechte)
+
+1. **Settings → Pages → Source: „GitHub Actions“.** Ohne das gibt es keine
+   Pages-Site, und der Deployment-Schritt läuft ins Leere.
+2. **Settings → Secrets and variables → Actions**, zwei Secrets anlegen:
+   `DISCORD_TOKEN` und `DISCORD_GUILD_ID` – dieselben Werte wie in der
+   `.env`. Der Workflow bricht ab, wenn sie fehlen, statt stillschweigend eine
+   Woche **Demo-Daten** zu veröffentlichen.
+
+Danach läuft `.github/workflows/publish.yml` alle sechs Stunden sowie bei
+jedem Push auf `main` und auf Zuruf (*Run workflow*). Ein Lauf dauert
+wenige Sekunden. GitHub stellt nachgelagerte Läufe bis zu einer Stunde
+zurück; `concurrency` bricht den Vorlauf ab, damit der Token nicht
+unnötig verbraucht wird.
+
+### Was sich auf Pages ändert
+
+| | mit Server | auf Pages |
+|---|---|---|
+| Zeitzone | umrechen, Auswahlfeld vollwertig | **gesperrt** auf die eine Zone, für die geschnitten wurde |
+| Blättern | beliebig | nur über den erzeugten Bereich (`data/index.json`); die Pfeile enden dort |
+| Diagnose-Link | zeigt `/api/health` | weggelassen – es gibt keinen Server, den man fragen könnte |
+
+Die gesperrte Zeitzone ist Absicht, keine Einschränkung durch die Technik: Der
+Schnitt entsteht beim Erzeugen der Datei, für genau eine Zone. Ein Auswahlfeld,
+das beim Wechsel zurückspringt, verspricht etwas, das dort nicht stattfindet –
+lieber ehrlich festgenagelt.
+
+`public/data/` steht in `.gitignore`: Die Dateien werden im Deployment erzeugt.
+Lägen sie im Repo, schleicht sich beim lokalen Testlauf leicht eine Woche
+Demo-Daten in die Seite, die dann veröffentlicht wird.
+
 ## Optional: Live statt pollen
 
 Statt des TTL-Caches lassen sich die Gateway-Events
