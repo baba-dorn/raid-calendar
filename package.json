@@ -11,6 +11,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "snapshot": "node tools/snapshot.mjs",
-    "preview": "node tools/serve-static.mjs"
+    "preview": "node tools/serve-static.mjs",
+    "check:workflow": "node tools/workflow-check.mjs"
   }
 }

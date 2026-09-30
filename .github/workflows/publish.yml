@@ -2,7 +2,7 @@ name: Wochenplan veröffentlichen
 
 # GitHub Pages kann nur Dateien ausliefern, kein Node. Deshalb holt dieser Lauf
 # die Termine aus Discord, legt sie als statische Dateien ab und veröffentlicht
-# `public/` – alle sechs Stunden, damit eine kurzfristig angesetzte Raid auch
+# `public/` – alle Viertelstunde, damit eine kurzfristig angesetzte Raid auch
 # ohne Zutun von jemandem auftaucht.
 on:
   schedule:
@@ -38,18 +38,18 @@ permissions:
   pages: write
   id-token: write
 
-  # Alle Viertelstunde ist das häufigste, was sinnvoll ist: GitHub stellt
-  # Zeitpläne nachgelagert, und unter etwa fünf Minuten sind sie unzuverlässig.
-  # Öffentliche Repos zahlen Standard-Runner frei, die 96 Läufe am Tag kosten
-  # also nichts. Die Workflow-Läufe sind auch nicht teuer für Besucher: Ein
-  # erneutes Deployment ändert `app.js`, `style.css` und das 2-MB-Bild nicht
-  # an, ihre ETags bleiben gleich, und der Browser beantwortet die Nachfrage mit
-  # 304, ohne einen Byte neu zu holen. Wirklich frisch ist nur die kleine
-  # Datendatei, und die holt sich die Seite ohnehin nur, wenn sie sich ändert.
-  env:
-    TIMEZONE: Europe/Berlin
-    WEEKS_BACK: '2'
-    WEEKS_FORWARD: '8'
+# Alle Viertelstunde ist das häufigste, was sinnvoll ist: GitHub stellt
+# Zeitpläne nachgelagert, und unter etwa fünf Minuten sind sie unzuverlässig.
+# Öffentliche Repos zahlen Standard-Runner frei, die 96 Läufe am Tag kosten
+# also nichts. Für Besucher ist es ebenfalls billig: Ein erneutes Deployment
+# ändert `app.js`, `style.css` und das 2-MB-Bild nicht an, ihre ETags bleiben
+# gleich, und der Browser beantwortet die Nachfrage mit 304, ohne einen Byte
+# neu zu holen. Wirklich frisch ist nur die kleine Datendatei, und die holt
+# sich die Seite ohnehin nur, wenn sich etwas geändert hat.
+env:
+  TIMEZONE: Europe/Berlin
+  WEEKS_BACK: '2'
+  WEEKS_FORWARD: '8'
 
 jobs:
   veroeffentlichen:

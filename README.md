@@ -508,6 +508,15 @@ Der Zeitplan steht bewusst auf `:07 :22 :37 :52` und nicht auf `:00`: GitHub
 stellt Läufe, die auf die volle Stunde fallen, hinten an, weil dort alles
 gleichzeitig startet.
 
+```bash
+npm run check:workflow   # vor dem Push
+```
+
+Eine verrutschte Einrückung in `publish.yml` kostet sonst einen Lauf, der
+sofort mit *„This run likely failed because of a workflow file issue"* abbricht
+— ohne Zeilennummer, weil der Lauf gar nicht erst startet. Der Prüfer fängt
+das ab, bevor es auf GitHub landet.
+
 ### Was sich auf Pages ändert
 
 | | mit Server | auf Pages |
