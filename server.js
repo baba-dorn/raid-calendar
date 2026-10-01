@@ -11,6 +11,13 @@ import { getEvents } from './src/source.js';
 
 const PUBLIC_DIR = resolve(fileURLToPath(new URL('./public', import.meta.url)));
 
+/**
+ * Name des Keksels, mit dem `public/app.js` einen Server erkennt. Muss mit
+ * `API_MARKER` in `public/app.js` übereinstimmen – dort steht kein Import,
+ * weil die Seite auch ohne Server laufen muss.
+ */
+export const API_MARKER = 'raidkalender_api';
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -64,6 +71,17 @@ function serveStatic(req, res, pathname) {
     ETag: etag,
     'Last-Modified': stat.mtime.toUTCString(),
   };
+
+  // Sagt der Seite, dass hinter dieser Adresse ein Server steht. Sonst
+  // erforscht sie es selbst – und auf GitHub Pages kostet das jedes Mal einen
+  // 404 im Netzwerk-Tab, den jeder als Fehler liest. Der Marker kommt
+  // unwiderruflich ans Dokument, nicht an `/api/week`, damit beim Herumblättern
+  // keine einzige Anfrage entsteht. Auch der 304 trägt ihn: Ein Browser, der
+  // die Seite zwischenspeichert, würde ihn sonst beim zweiten Aufruf verlieren
+  // und wieder ins Leere fragen.
+  if (relative === '' || relative === 'index.html') {
+    headers['Set-Cookie'] = `${API_MARKER}=1; Path=/; SameSite=Lax; Max-Age=86400`;
+  }
 
   if (req.headers['if-none-match'] === etag) {
     res.writeHead(304, headers).end();

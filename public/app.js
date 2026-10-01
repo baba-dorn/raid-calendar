@@ -1454,25 +1454,31 @@ function setStatus(text, stateName = 'ok') {
  * `/api/week` doch wieder auf die echten zu. Wer eine schnellere Quelle hat,
  * muss sie zuerst nehmen; die Dateien sind der Ersatz, nicht das Ziel.
  *
- * `null` heißt „unbekannt“. Nach dem ersten 404 weiß die Seite, dass es keine
- * gibt, und fragt nicht bei jedem Blättern erneut – auf Pages ist der Fehlversuch
- * also einmal pro Sitzung, nicht einmal je Woche.
+ * Ob es überhaupt einen Server gibt, sagt ein Keksel, den der Server beim
+ * Ausliefern der Seite mitgibt. Ein Herumprobieren wäre einfacher, kostet auf
+ * GitHub Pages aber bei jedem Öffnen einen 404 – den jeder im Netzwerk-Tab als
+ * Fehler liest, obwohl die Seite einwandfrei läuft. Der Keksel kostet nichts
+ * und irrt sich nicht. Name: `API_MARKER` in `server.js`.
  */
-let apiVorhanden = null;
+const API_MARKER = 'raidkalender_api';
+
+let apiVorhanden = document.cookie.split('; ').some((teil) => teil.startsWith(`${API_MARKER}=`));
 
 async function fetchWeek(params) {
-  if (apiVorhanden !== false) {
+  if (apiVorhanden) {
     try {
       const response = await fetch(`/api/week?${params}`);
       if (response.ok) {
-        apiVorhanden = true;
         state.source = 'api';
         state.weeks = null;
         els.prevWeek.disabled = false;
         els.nextWeek.disabled = false;
         return await response.json();
       }
-      if (response.status === 404) apiVorhanden = false;
+      // Der Keksel verspricht einen Server, der nicht antwortet – etwa weil er
+      // zwischenzeitlich gestoppt wurde. Die Dateien sind dann immer noch
+      // besser als eine leere Seite.
+      apiVorhanden = false;
     } catch {
       apiVorhanden = false;
     }
@@ -1490,9 +1496,9 @@ async function fetchWeek(params) {
     /* Weder Server noch Datei – gleich der Fehler unten. */
   }
 
-  throw new Error(apiVorhanden === false
-    ? 'Keine Datei für diese Woche vorhanden'
-    : 'Server nicht erreichbar und keine Datei vorhanden');
+  throw new Error(apiVorhanden
+    ? 'Server antwortete nicht und es gibt keine Dateien'
+    : 'Keine Datei für diese Woche vorhanden');
 }
 
 /** Liest die Liste der erzeugten Wochen, damit die Pfeile einen Endpunkt haben. */
