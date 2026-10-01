@@ -506,9 +506,20 @@ Discord-Token aus dem Repo.
 Die Seite prüft zusätzlich selbst nach: Alle fünf Minuten fragt sie
 `data/latest.json` ab, und **nur wenn sich der Erzeugungszeitpunkt geändert
 hat**, wird neu gerendert. Beim Zurückholen eines Tabs aus dem Hintergrund
-passiert das sofort. Ohne diese Prüfung stünde ein Tab, den jemand den ganzen
-Tag offen lässt, auf dem Stand von heute Morgen – das Neuladen wäre der
-einzige Weg, und das macht niemand.
+passiert das sofort. Das Nachladen bewegt den Betrachter nirgends hin – es holt
+nur die gerade gezeigte Woche neu, auch wenn er in einer anderen blättert.
+
+Damit sich beurteilen lässt, ob die Kette läuft, steht in der Statuszeile nicht
+nur `Stand 15:31`, sondern `Stand 15:31 · vor 18 Min.`. Ohne das Alter sieht
+eine Seite um 15:35 und um 17:20 völlig gleich aus, und niemand kann
+unterscheiden, ob gerade nichts anliegt oder der Plan seit zwei Stunden nichts
+Neues bringt. Das Alter läuft bei jedem Prüfzyklus mit.
+
+Zur Einordnung der Zahlen: Aus einem Änderungswunsch in Discord bis zum
+sichtbaren Termin liegen bis zu etwa **eine Stunde** (bis zum nächsten Lauf) plus
+etwa **zehn Minuten** (bis das CDN die neue Datei ausliefert) plus bis zu
+**fünf Minuten** (bis die offene Seite nachfragt). Das ist keine Rechenaufgabe,
+sondern das, was GitHub Pages hergibt.
 
 Der Takt ist weder teuer für dich noch für Besucher: Ein öffentliches Repo
 rechnet Standard-Runner umsonst ab, die 24 Läufe am Tag also gratis. Und ein

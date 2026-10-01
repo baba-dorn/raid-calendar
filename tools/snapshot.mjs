@@ -37,20 +37,29 @@ const FORWARD = Number.parseInt(process.env.WEEKS_FORWARD ?? '8', 10);
 
 const int = (value, fallback) => (Number.isFinite(Number.parseInt(value, 10)) ? Number.parseInt(value, 10) : fallback);
 
-/** Wie der Server, nur ohne HTTP dazwischen. */
+/**
+ * Wie der Server, nur ohne HTTP dazwischen.
+ *
+ * `__fetchedAt`, `__stale` und `__error` sind Notizen, die ich mir an das
+ * Wochenergebnis hänge, um sie nach `meta` durchreichen zu können. Ein
+ * `{...week}` würde sie mitschleppen – sie standen dann als `__fetchedAt` und
+ * `__error` mitten in der veröffentlichten Datei, wo niemand sie braucht und
+ * niemand sie zu deuten weiß. Sie kommen einzeln und nicht mit dem Rest.
+ */
 function payloadFor(week) {
   const { lanes, source } = applyLanes(week);
+  const { __fetchedAt, __stale, __error, ...rest } = week;
   return {
-    ...week,
+    ...rest,
     lanes,
     meta: {
       source: isDemoMode ? 'demo' : 'discord',
       hourHeight: config.hourHeight,
       lanes: source,
-      fetchedAt: new Date(week.__fetchedAt).toISOString(),
-      stale: Boolean(week.__stale),
-      error: week.__error ?? null,
-      problem: explainError(week.__error),
+      fetchedAt: new Date(__fetchedAt).toISOString(),
+      stale: Boolean(__stale),
+      error: __error ?? null,
+      problem: explainError(__error),
       static: true,
     },
   };

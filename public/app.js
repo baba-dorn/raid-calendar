@@ -33,6 +33,9 @@ const state = {
   weeks: null,
   /** Wann der gerade gezeigte Schnappschuss erzeugt wurde. */
   generatedAt: null,
+  /** Zuletzt gesetzter Status, damit `watchForFreshData` das Alter auffrischen kann. */
+  statusText: '',
+  statusState: 'ok',
 };
 
 const MINUTES_PER_DAY = 1440;
@@ -1515,6 +1518,23 @@ async function loadWeekIndex() {
   }
 }
 
+/**
+ * Wie alt die Daten sind. Ohne das steht da nur „Stand 15:31“ – um 15:35 und
+ * um 17:20 sieht eine Seite gleich alt aus, und niemand kann unterscheiden,
+ * ob gerade nichts anliegt oder der Plan seit zwei Stunden nichts Neues bringt.
+ * Genau diese Unentscheidbarkeit führt zu dem Verdacht, Änderungen würden
+ * übersehen.
+ */
+function alterText(iso) {
+  if (!iso) return 'unbekannt';
+  const minuten = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (minuten < 2) return 'gerade eben';
+  if (minuten < 60) return `vor ${minuten} Min.`;
+  const stunden = Math.floor(minuten / 60);
+  if (stunden < 24) return `vor ${stunden} Std.`;
+  return `vor ${Math.floor(stunden / 24)} Tagen`;
+}
+
 async function loadWeek() {
   setStatus('Lade Termine …', 'loading');
   const params = new URLSearchParams();
@@ -1546,8 +1566,10 @@ async function loadWeek() {
 
     const note = week.meta?.stale
       ? `Stand ${new Date(week.meta.fetchedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (veraltet)`
-      : `Stand ${new Date(week.generatedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
+      : standMitAlter(state.generatedAt);
     setStatus(week.meta?.error ? `Fehler: ${week.meta.error}` : note, week.meta?.error ? 'error' : 'ok');
+    state.statusText = note;
+    state.statusState = week.meta?.error ? 'error' : 'ok';
     updateNavButtons();
   } catch (error) {
     // Sichtbar für den Nutzer *und* in der Konsole – sonst bleibt ein Fehler
@@ -1637,19 +1659,44 @@ async function watchForFreshData() {
     const probe = await fetch('data/latest.json', { cache: 'no-cache' });
     if (!probe.ok) return;
     const body = await probe.json();
-    if (!body.generatedAt || body.generatedAt === state.generatedAt) return;
-
-    state.generatedAt = body.generatedAt;
-    if (!state.weekStart || state.weekStart === body.weekStart) {
-      await loadWeek();
-    } else {
-      // Der Betrachter blättert gerade in einer anderen Woche. Ihn ungefragt
-      // dorthin zu ziehen, wäre eine Überraschung – der Hinweis reicht.
-      setStatus('Neuere Daten verfügbar – „Diese Woche" holt sie');
+    if (!body.generatedAt || body.generatedAt === state.generatedAt) {
+      // Nichts Neues. Das Alter trotzdem auffrischen, sonst steht dort weiter
+      // „vor 3 Min.“, während es längst eine Stunde her ist – und genau daran
+      // erkennt niemand, ob die Kette hängt.
+      //
+      // Nur bei gutem Stand: Ein Fehlertext ist kein „Stand …“ und würde hier
+      // stillschweigend durch eine Uhrzeit ersetzt – der einzige Hinweis auf ein
+      // defektes Laden verschwände genau dann, wenn jemand hinschaut.
+      if (state.statusText && state.statusState !== 'error') {
+        setStatus(standMitAlter(state.generatedAt), state.statusState);
+      }
+      return;
     }
+
+    // Neu. Die gerade gezeigte Woche wird neu geladen – auch wenn der Betrachter
+    // in einer anderen Woche blättert: Das Nachladen bewegt ihn nirgends hin,
+    // es holt nur die Datei dieser Woche erneut. Vorher stand hier ein Hinweis
+    // statt einer Aktualisierung, und wer in der Vorwoche blätterte, bekam gar
+    // nichts zu sehen.
+    await loadWeek();
+    // Der erzeugte Bereich kann gewachsen sein (etwa weil eine Raid weiter
+    // voraus angekündigt wurde); die Pfeile müssen das wissen.
+    state.weeks = null;
+    await loadWeekIndex();
+    updateNavButtons();
   } catch {
     /* Kein Netz oder Seite im Übergang – beim nächsten Mal wieder. */
   }
+}
+
+/** Setzt „Stand HH:MM · vor …“ aus dem Zeitpunkt des Schnappschusses. */
+function standMitAlter(iso) {
+  if (!iso) return 'Stand unbekannt';
+  const uhrzeit = new Date(iso).toLocaleTimeString('de-DE', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `Stand ${uhrzeit} · ${alterText(iso)}`;
 }
 
 fillTimezones(state.timezone);
