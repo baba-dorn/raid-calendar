@@ -59,15 +59,50 @@ for (const [i, roh] of zeilen.entries()) {
 
 const cron = text.match(/cron:\s*'([^']+)'/)?.[1] ?? '(keine)';
 
-// Takt aus den Minutenangaben ableiten, nicht raten: "7,22,37,52" bedeutet
-// alle 15 Minuten, "*/6" alle sechs Stunden. Für die Anzeige genügt der
-// kleinste Abstand benachbarter Einträge – samt Sprung über die volle Stunde.
+// Takt aus dem Cron-Ausdruck ableiten, nicht raten. Gerade hier hat ein
+// Verkalkulieren schon einmal getäuscht: "17 */6 * * *" sieht nach einer
+// Minute aus und ist alle sechs Stunden. Beide Felder gehören gelesen.
 function takt(text) {
-  const direkt = text.match(/^(\*|\d+)\/(\d+)/);
-  if (direkt) return direkt[1] === '*' ? `alle ${direkt[2]} Minuten` : `jede ${direkt[2]}. Stunde`;
-  const liste = text.split(/\s+/)[0].split(',').map(Number);
-  if (liste.length < 2 || liste.some((n) => !Number.isInteger(n))) return 'unbekannt';
-  const abstaende = liste.map((m, i) => (liste[(i + 1) % liste.length] - m + 60) % 60).filter((a) => a > 0);
+  const felder = text.trim().split(/\s+/);
+  if (felder.length !== 5) return 'unbekannt';
+  const [minute, stunde] = felder;
+
+  const schritt = (feld) => {
+    const stern = feld.match(/^\*\/(\d+)$/);
+    if (stern) return Number(stern[1]);
+    const bereich = feld.match(/^(\d+)-(\d+)\/(\d+)$/);
+    if (bereich) return Number(bereich[3]);
+    return null;
+  };
+
+  const minutenSchritt = schritt(minute);
+  // "*/30" ist keine Liste aus Zahlen – Number('*/30') wäre NaN und würde die
+  // Prüfung mit einem "unbekannt" abbrechen, bevor das Schrittformular
+  // überhaupt eine Rolle spielt.
+  const minutenListe =
+    minute === '*' || minutenSchritt ? null : minute.split(',').map(Number);
+  if (minutenListe && minutenListe.some((n) => !Number.isInteger(n) || n < 0 || n > 59)) {
+    return 'unbekannt';
+  }
+
+  // "N */M" – zu Minute N alle M Stunden. Über das Stundenschrittfeld zu
+  // urteilen, nicht über die Minute: Genau so hat sich "17 */6" einmal als
+  // "stündlich Minute 17" ausgegeben.
+  const stundenSchritt = schritt(stunde);
+  if (stundenSchritt && stundenSchritt > 1 && minutenListe && minutenListe.length === 1) {
+    return stundenSchritt >= 24 ? 'taeglich' : `alle ${stundenSchritt} Stunden (Minute ${minutenListe[0]})`;
+  }
+
+  if (stunde !== '*') return 'unbekannt';
+
+  if (minutenSchritt && minutenSchritt > 1) return `alle ${minutenSchritt} Minuten`;
+  if (!minutenListe) return 'stuendlich';
+  if (minutenListe.length === 1) {
+    return minutenListe[0] === 0 ? 'stuendlich' : `stuendlich (Minute ${minutenListe[0]})`;
+  }
+  const abstaende = minutenListe
+    .map((m, i) => (minutenListe[(i + 1) % minutenListe.length] - m + 60) % 60)
+    .filter((a) => a > 0);
   const kleinster = Math.min(...abstaende);
   return kleinster === 60 ? 'stuendlich' : `alle ${kleinster} Minuten`;
 }

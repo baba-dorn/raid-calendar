@@ -2,15 +2,19 @@ name: Wochenplan veröffentlichen
 
 # GitHub Pages kann nur Dateien ausliefern, kein Node. Deshalb holt dieser Lauf
 # die Termine aus Discord, legt sie als statische Dateien ab und veröffentlicht
-# `public/` – alle Viertelstunde, damit eine kurzfristig angesetzte Raid auch
-# ohne Zutun von jemandem auftaucht.
+# `public/`, damit eine neu angesetzte Raid auch ohne Zutun von jemandem
+# auftaucht.
 on:
   schedule:
-    # Alle Viertelstunde – nicht auf :00. GitHub stellt planmäßige Läufe, die
-    # auf volle Stunde fallen, bewusst hinten an, weil dann alles gleichzeitig
-    # startet. Mit dem Versatz von sieben Minuten steht der Plan trotzdem
-    # zuverlässig, und :00 bleibt für die Läufe anderer Repos frei.
-    - cron: '7,22,37,52 * * * *'
+    # Einmal pro Stunde, und zwar bei Minute 23. GitHub stellt in der Doku ausdrücklich
+    # fest: planmäßige Läufe können unter Last verzögert und verworfen werden
+    # ("some queued jobs may be dropped"). Ausprobiert: alle Viertelstunde waren
+    # vier Warteschlangen-Einträge pro Stunde, angekommen ist in neun Stunden
+    # genau einer – die Seite war sechs Stunden alt, obwohl der Zeitplan das nicht
+    # vorsah. Eine einzelne Zeitmarke ist ein einzelner Eintrag in der
+    # Warteschlange und kommt damit deutlich zuverlässiger durch.
+    # Minute 23 statt :00, weil GitHub Läufe auf die volle Stunde zurückstellt.
+    - cron: '23 * * * *'
   workflow_dispatch: # auf Zuruf, z. B. wenn ein Raid kurzfristig geändert wurde
   push:
     branches: [main]
@@ -27,25 +31,26 @@ on:
       - 'package.json'
       - '.github/workflows/publish.yml'
 
-# Eine spätere Planung bricht frühere Läufe ab – der Token wird sonst im
-# Sekundentakt verbraucht, weil GitHub nach 60 Minuten wartet.
+# Läufe dürfen sich nicht gegenseitig abbrechen. Genau das war vorher eingestellt,
+# um Token zu sparen – aber ein wartender planmäßiger Lauf wird dann stillschweigend
+# verworfen, sobald ein Push-Lauf startet. Bei 30 Sekunden Laufzeit und einer
+# Marke pro Stunde ist Überschneiden ausgeschlossen, der Abbruch brächte also nur
+# Verluste.
 concurrency:
   group: publish-pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Alle Viertelstunde ist das häufigste, was sinnvoll ist: GitHub stellt
-# Zeitpläne nachgelagert, und unter etwa fünf Minuten sind sie unzuverlässig.
-# Öffentliche Repos zahlen Standard-Runner frei, die 96 Läufe am Tag kosten
-# also nichts. Für Besucher ist es ebenfalls billig: Ein erneutes Deployment
-# ändert `app.js`, `style.css` und das 2-MB-Bild nicht an, ihre ETags bleiben
-# gleich, und der Browser beantwortet die Nachfrage mit 304, ohne einen Byte
-# neu zu holen. Wirklich frisch ist nur die kleine Datendatei, und die holt
-# sich die Seite ohnehin nur, wenn sich etwas geändert hat.
+# Öffentliche Repos zahlen Standard-Runner frei, 24 Läufe am Tag also nichts.
+# Für Besucher ist es ebenfalls billig: Ein erneutes Deployment ändert `app.js`,
+# `style.css` und das 2-MB-Bild nicht an, ihre ETags bleiben gleich, und der
+# Browser beantwortet die Nachfrage mit 304, ohne einen Byte neu zu holen. Wirklich
+# frisch ist nur die kleine Datendatei, und die holt sich die Seite ohnehin nur,
+# wenn sich der Erzeugungszeitpunkt geändert hat.
 env:
   TIMEZONE: Europe/Berlin
   WEEKS_BACK: '2'
