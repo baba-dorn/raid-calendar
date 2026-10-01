@@ -13,7 +13,7 @@
       "host": "mit Dorn",
       "glyph": "🌙",
       "accent": "#8fdc4a",
-      "note": "Zusammenlegen, Boss-Routen üben, nette Leute kennenlernen. Offen für alle.",
+      "note": "Wir sind ein Team. Ein Fokus. Ein Bollwerk. Getragen von einem Kern fightstarker Spielerinnen und Spieler ermöglicht dir unser Public selbst zur Primetime einfach mitzulaufen und starken Gegenern zu trotzden.",
       "voiceChannel": "1268920421403594832",
       "match": ["public"],
       "baseline": {
@@ -28,7 +28,7 @@
       "host": "mit Meow",
       "glyph": "🌀",
       "accent": "#b06bff",
-      "note": "Für die Nachtschicht. Kein Druck, einfach mithalten.",
+      "note": "Für die Nachtschicht. Kein Druck, einfach mitlaufen, Spaß haben und mit netten Leuten die Welt erobern.",
       "voiceChannel": "1268920421403594832",
       "match": ["spätschicht", "spaetschicht", "nachtschicht", "\\blate\\b"],
       "baseline": {
@@ -43,7 +43,8 @@
       "host": "mit wechselnden Commander:innen",
       "glyph": "☀️",
       "accent": "#f0b429",
-      "note": "Resettraid mit wechselnden Commander:innen.",
+      "note": "Enmal in der Woche wird das Spiel zurückgesetzt. Alles auf Null. Grund genug für ein ganz besonderes Event. Im Resetraid lernst du alle halbe stunde einen neuen Commander kennen oder kannst auch selbst einmal einen halbe Stunde leiten. Sei pünklich vor Beginn im Squad und frage nach, auf welcher Karte du dich anstellen musst, denn wir werden wirklich viele sein.",
+      "voiceChannel": "1268920421403594832",
       "match": ["reset", "kommi"],
       "baseline": {
         "days": ["FR"],
@@ -62,7 +63,7 @@
       "baseline": {
         "days": ["Sa"],
         "start": "17:00",
-        "end": "18:00"
+        "end": "18:30"
       }
     }
   ],

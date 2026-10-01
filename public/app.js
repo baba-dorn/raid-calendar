@@ -1412,7 +1412,7 @@ function openSlotDetail(lane) {
           `<div class="detail-row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`,
       )
       .join('')}</div>
-    <p class="detail-description">Dieser Slot steht in <code>lanes.json</code>, nicht in Discord. Er erscheint hier, weil sonst niemand sähe, dass er stattfindet – und verschwindet, sobald ein echtes Raid darüberliegt.</p>
+    <p class="detail-description">${escapeHtml(lane.note)}</p>
     <p class="detail-footnote">Zeiten in ${escapeHtml(tz ?? '')}</p>
   `;
 
