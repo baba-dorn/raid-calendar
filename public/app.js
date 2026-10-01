@@ -890,7 +890,7 @@ function renderSlotBand(band, axis) {
   card.style.left = '2px';
   card.style.width = 'calc(100% - 4px)';
 
-  if (height >= SLOT_FULL_HEIGHT) {
+  if (false && height >= SLOT_FULL_HEIGHT) {
     card.append(el('span', 'slot-rhythm', `${slotRhythm(lane)} ${overnight ? 'ab' : 'ca.'}`));
   }
   card.append(
