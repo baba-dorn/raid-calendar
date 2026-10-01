@@ -9,3 +9,6 @@ demo_banner/
 # Deployment gelegt. Läge es im Repo, schleicht sich beim lokalen Testlauf
 # leicht eine Woche Demo-Daten in die Seite, die dann veröffentlicht wird.
 public/data/
+
+# Von Wrangler lokal: der Cache des Workers und der KV unter `wrangler dev`.
+.wrangler/

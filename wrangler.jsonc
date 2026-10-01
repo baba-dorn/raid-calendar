@@ -1,0 +1,67 @@
+{
+	// Cloudflare Worker für den Wochenkalender.
+	//
+	// Die Grundidee ist ein Zeitplan statt eines Servers: alle paar Minuten fragt
+	// `scheduled()` die Discord-API ab und legt das Ergebnis in die KV. Die Seite
+	// fragt nur noch `/api/week`, und das liest ausschließlich die KV. Damit wird
+	// aus dem "ständig irgendwo laufenden Dienst" ein Worker, der zwischen zwei
+	// Läufen gar nichts kostet und nicht daran denken kann, abzustürzen.
+	//
+	// Siehe README.md, Abschnitt "Veröffentlichen auf Cloudflare Workers".
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "discord-week-calendar",
+	"main": "src/worker.js",
+	// nodejs_compat bringt `node:fs`/`node:path` mit, die `src/lanes.js`
+	// statisch importiert – dort wird im Worker nur nicht mehr gelesen.
+	"compatibility_date": "2025-06-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true
+	},
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS",
+		// Nur `/api/*` und das HTML-Dokument erreichen den Worker; `app.js`,
+		// `style.css` und das 2-MB-Bild bedient Cloudflare direkt aus dem CDN.
+		// Der Grund für das Dokument ist allein der Keksel in `src/worker.js`,
+		// an dem `public/app.js` einen Server erkennt.
+		// Braucht wrangler >= 3.91 – ältere Wrangler kennen nur `true`/`false`.
+		"run_worker_first": [
+			"/api/*",
+			"/",
+			"/index.html"
+		]
+	},
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			// Nach `npx wrangler kv namespace create KV` die dort angezeigte ID
+			// hier eintragen. Sie steht auch im Dashboard unter "KV".
+			"id": "95bb681e235e466e9d0900ad7fcfeeb4",
+			"remote": true
+		}
+	],
+	"triggers": {
+		// Alle fünf Minuten. Eine Änderung an einem Zeitplan braucht bis zu
+		// 15 Minuten, bis sie im Netz gilt – nicht mit dem Deploy verwechseln.
+		"crons": [
+			"*/5 * * * *"
+		]
+	},
+	"vars": {
+		// Kein Token hier, sondern `npx wrangler secret put DISCORD_TOKEN`.
+		// Das hier ist die Server-ID und gehört zu `DISCORD_GUILD_ID` in `.env`.
+		"DISCORD_GUILD_ID": "1193184158026039337",
+		"TIMEZONE": "Europe/Berlin",
+		"WEEK_STARTS_ON": "1",
+		"HOUR_HEIGHT": "46",
+		"DEFAULT_DURATION_MINUTES": "120",
+		// Serverseitiger Puffer. Im Worker ist er fast bedeutungslos, weil die
+		// Daten ohnehin erst alle fünf Minuten neu geschrieben werden – er schützt
+		// nur davor, dass ein Häufchen Besucher dieselbe Sekunde denselben Abruf
+		// erzwingt.
+		"CACHE_TTL_MS": "60000"
+	}
+}

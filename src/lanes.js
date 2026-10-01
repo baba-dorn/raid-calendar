@@ -1,9 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
-import { ROOT, loadEnvFile } from './env.js';
-
-loadEnvFile();
+import { config, isWorkerRuntime } from './config.js';
 
 /** Editor schreiben ein BOM voran; JSON.parse stolpert darueber. */
 const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
@@ -166,28 +164,61 @@ function normalizeConfig(raw) {
 let cached = null;
 
 /**
- * Lädt `lanes.json` einmalig. Eine kaputte Datei darf den Kalender nie
+ * Inhalt der Spurendatei als Text, wenn es keine Platte gibt – der Worker
+ * bekommt `lanes.json` mit ins Bundle geliefert (`src/lanes.data.js`) und ruft
+ * hiermit `setLaneText()`.
+ */
+let laneText = null;
+
+/**
+ * Übergibt die Spurendatei für Laufzeiten ohne Dateisystem. Die Zuweisung leert
+ * den Zwischenspeicher, weil sie vor dem ersten `applyLanes()` passiert – aber
+ * ein späterer Aufruf soll sie trotzdem nicht übergehen.
+ */
+export function setLaneText(text) {
+  laneText = text ?? null;
+  cached = null;
+}
+
+/** Liest eine Spurendatei ein. Kaputt heißt: Vorgabe, nie Fehler. */
+function parseLaneText(text, label) {
+  try {
+    return JSON.parse(stripBom(text));
+  } catch (error) {
+    console.warn(`[lanes] ${label} ist kein gültiges JSON (${error.message}) – Vorgabe wird benutzt.`);
+    return null;
+  }
+}
+
+/**
+ * Lädt die Spurendatei einmalig. Eine kaputte Datei darf den Kalender nie
  * stoppen – dann gilt die mitgelieferte Vorgabe.
  */
 export function loadLaneConfig({ force = false } = {}) {
   if (cached && !force) return cached;
 
-  const configured = process.env.LANES_FILE?.trim();
-  const path = configured
-    ? isAbsolute(configured)
-      ? configured
-      : join(ROOT, configured)
-    : join(ROOT, 'lanes.json');
-
   let raw = null;
   let origin = 'default';
+  let path = null;
 
-  if (existsSync(path)) {
-    try {
-      raw = JSON.parse(stripBom(readFileSync(path, 'utf8')));
-      origin = 'file';
-    } catch (error) {
-      console.warn(`[lanes] ${path} ist kein gültiges JSON (${error.message}) – Vorgabe wird benutzt.`);
+  if (laneText != null) {
+    // Worker: keine Datei, nur mitgelieferter Text. Eine Änderung an
+    // `lanes.json` braucht dort ein erneutes `wrangler deploy` – unter Node
+    // wird sie beim nächsten Neustart gelesen, hier erst mit dem nächsten Deploy.
+    raw = parseLaneText(laneText, 'lanes.json (Bundle)');
+    origin = raw ? 'bundle' : 'default';
+  } else if (!isWorkerRuntime) {
+    const configured = config.lanesFile;
+    const root = config.root ?? '.';
+    path = configured
+      ? isAbsolute(configured)
+        ? configured
+        : join(root, configured)
+      : join(root, 'lanes.json');
+
+    if (existsSync(path)) {
+      raw = parseLaneText(readFileSync(path, 'utf8'), path);
+      origin = raw ? 'file' : 'default';
     }
   }
 

@@ -33,6 +33,8 @@ const state = {
   weeks: null,
   /** Wann der gerade gezeigte Schnappschuss erzeugt wurde. */
   generatedAt: null,
+  /** Wann die *Daten* zuletzt bei Discord geholt wurden (`meta.fetchedAt`). */
+  fetchedAt: null,
   /** Zuletzt gesetzter Status, damit `watchForFreshData` das Alter auffrischen kann. */
   statusText: '',
   statusState: 'ok',
@@ -1535,11 +1537,17 @@ function alterText(iso) {
   return `vor ${Math.floor(stunden / 24)} Tagen`;
 }
 
-async function loadWeek() {
-  setStatus('Lade Termine …', 'loading');
+/** Die Parameter, mit denen die gerade gezeigte Woche angefragt wird. */
+function weekParams() {
   const params = new URLSearchParams();
   if (state.weekStart) params.set('start', state.weekStart);
   if (state.timezone) params.set('tz', state.timezone);
+  return params;
+}
+
+async function loadWeek() {
+  setStatus('Lade Termine …', 'loading');
+  const params = weekParams();
 
   try {
     const week = await fetchWeek(params);
@@ -1549,6 +1557,10 @@ async function loadWeek() {
     // Zeitpunkt dieses Schnappschusses. `watchForFreshData` vergleicht ihn mit
     // dem von `data/latest.json` und weiß so, ob sich etwas getan hat.
     state.generatedAt = week.generatedAt ?? null;
+    // Beim Server ist `generatedAt` der Zeitpunkt der *Anfrage* – alle zehn
+    // Sekunden ein anderer, ohne dass sich etwas geändert hätte. Vergleichbar
+    // ist dort nur, wann die Daten zuletzt bei Discord geholt wurden.
+    state.fetchedAt = week.meta?.fetchedAt ?? null;
     els.timezone.value = week.timezone;
     render(week);
 
@@ -1643,14 +1655,50 @@ document.addEventListener('keydown', (event) => {
 });
 
 /**
- * Bei statischer Auslieferung prüft die Seite selbst, ob ein neuer Schnappschuss
- * da ist. Ohne das bliebe ein Tab, den jemand den ganzen Tag offen lässt, auf
- * dem Stand von heute Morgen stehen – nach dem Neuladen wäre plötzlich ein Raid
- * da, den vorher niemand gesehen hat. Beim lokalen Betrieb gibt es dafür nichts
- * zu tun: Der Server holt ohnehin bei jedem Aufruf frisch.
+ * Prüft selbst, ob neue Daten da sind – bei statischer Auslieferung und beim
+ * Cloudflare-Worker. Ohne das bliebe ein Tab, den jemand den ganzen Tag offen
+ * lässt, auf dem Stand von heute Morgen stehen – nach dem Neuladen wäre
+ * plötzlich ein Raid da, den vorher niemand gesehen hat.
+ *
+ * Der Unterschied zwischen beiden Fällen ist derselbe wie bei `fetchWeek()`:
+ * GitHub Pages legt Dateien ab, der Worker fragt `/api/week`. Und was verglichen
+ * wird, unterscheidet sich mit – siehe `state.generatedAt` und `state.fetchedAt`.
  */
 async function watchForFreshData() {
-  if (state.source !== 'file' || document.hidden) return;
+  if (document.hidden) return;
+  if (state.source === 'file') return probeFileForFreshData();
+  if (state.source === 'api') return probeApiForFreshData();
+}
+
+/**
+ * Nichts Neues: nur das Alter in der Statuszeile auffrischen.
+ *
+ * Nur bei gutem Stand: Ein Fehlertext ist kein „Stand" und würde hier
+ * stillschweigend durch eine Uhrzeit ersetzt – der einzige Hinweis auf ein
+ * defektes Laden verschwände genau dann, wenn jemand hinschaut.
+ */
+function refreshAgeOnly() {
+  if (state.statusText && state.statusState !== 'error') {
+    setStatus(standMitAlter(state.generatedAt), state.statusState);
+  }
+}
+
+/** Neu: die gerade gezeigte Woche wird neu geladen. */
+async function reloadShownWeek() {
+  // Das Nachladen bewegt den Betrachter nirgends hin – es holt nur die Woche
+  // erneut, auch wenn er in einer anderen blättert. Vorher stand hier ein Hinweis
+  // statt einer Aktualisierung, und wer in der Vorwoche blätterte, bekam gar
+  // nichts zu sehen.
+  await loadWeek();
+  // Der erzeugte Bereich kann gewachsen sein (etwa weil eine Raid weiter voraus
+  // angekündigt wurde); die Pfeile müssen das wissen.
+  state.weeks = null;
+  await loadWeekIndex();
+  updateNavButtons();
+}
+
+/** GitHub Pages: ein Blick auf `data/latest.json`, winzig und meist ein 304. */
+async function probeFileForFreshData() {
   try {
     // `no-cache` ist hier entscheidend: Ohne das antwortet der Browser bis zu
     // zehn Minuten lang aus dem eigenen Cache, und die Prüfung bemerkt einen
@@ -1663,27 +1711,37 @@ async function watchForFreshData() {
       // Nichts Neues. Das Alter trotzdem auffrischen, sonst steht dort weiter
       // „vor 3 Min.“, während es längst eine Stunde her ist – und genau daran
       // erkennt niemand, ob die Kette hängt.
-      //
-      // Nur bei gutem Stand: Ein Fehlertext ist kein „Stand …“ und würde hier
-      // stillschweigend durch eine Uhrzeit ersetzt – der einzige Hinweis auf ein
-      // defektes Laden verschwände genau dann, wenn jemand hinschaut.
-      if (state.statusText && state.statusState !== 'error') {
-        setStatus(standMitAlter(state.generatedAt), state.statusState);
-      }
+      refreshAgeOnly();
       return;
     }
 
-    // Neu. Die gerade gezeigte Woche wird neu geladen – auch wenn der Betrachter
-    // in einer anderen Woche blättert: Das Nachladen bewegt ihn nirgends hin,
-    // es holt nur die Datei dieser Woche erneut. Vorher stand hier ein Hinweis
-    // statt einer Aktualisierung, und wer in der Vorwoche blätterte, bekam gar
-    // nichts zu sehen.
-    await loadWeek();
-    // Der erzeugte Bereich kann gewachsen sein (etwa weil eine Raid weiter
-    // voraus angekündigt wurde); die Pfeile müssen das wissen.
-    state.weeks = null;
-    await loadWeekIndex();
-    updateNavButtons();
+    await reloadShownWeek();
+  } catch {
+    /* Kein Netz oder Seite im Übergang – beim nächsten Mal wieder. */
+  }
+}
+
+/**
+ * Cloudflare-Worker: dieselbe Frage an `/api/week`.
+ *
+ * `meta.fetchedAt` ist der Zeitpunkt, zu dem der Worker Discord zuletzt gefragt
+ * hat – er wandert mit jedem Zeitplan-Lauf und nur dann, wenn wirklich etwas
+ * Neues da war. `generatedAt` taugt hier nicht als Vergleich: Der Worker pinnt
+ * die Woche auf den Zeitpunkt der Daten, der *lokale* Server rechnet aber mit
+ * der Uhr des Aufrufs, und ein Vergleich darauf ließe den Tab alle fünf Minuten
+ * neu laden, ohne dass sich etwas geändert hätte.
+ */
+async function probeApiForFreshData() {
+  try {
+    const probe = await fetch(`/api/week?${weekParams()}`, { cache: 'no-cache' });
+    if (!probe.ok) return;
+    const body = await probe.json();
+    const stamp = body.meta?.fetchedAt ?? null;
+    if (!stamp || stamp === state.fetchedAt) {
+      refreshAgeOnly();
+      return;
+    }
+    await reloadShownWeek();
   } catch {
     /* Kein Netz oder Seite im Übergang – beim nächsten Mal wieder. */
   }

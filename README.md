@@ -192,6 +192,11 @@ GET /api/week?start=YYYY-MM-DD&tz=Europe/Berlin
 public/app.js       Zeitachse (stückweise linear), Tagesspalten, Karten
 ```
 
+Derselbe Weg läuft in drei Ausprägungen: lokal aus `server.js`, auf GitHub Pages
+aus `tools/snapshot.mjs` (Dateien statt API) und auf Cloudflare aus
+`src/worker.js`, wo der Zeitplan in die KV schreibt und `/api/week` nur noch
+liest. Unterschiedlich ist jeweils nur, wo der Schnappschuss liegt.
+
 ### API
 
 | Route | Zweck |
@@ -199,6 +204,7 @@ public/app.js       Zeitachse (stückweise linear), Tagesspalten, Karten
 | `GET /api/week?start=YYYY-MM-DD&tz=…` | Wochenmodell: `days[]`, `lanes[]` (Metadaten der Spuren) |
 | `GET /api/config` | effektive Konfiguration |
 | `GET /api/health` | Kurzstatus |
+| `POST /api/refresh` | nur im Worker: holt sofort neu, statt auf den Zeitplan zu warten |
 
 `start` und `tz` sind optional; ohne `start` liefert der Server die aktuelle Woche.
 
@@ -359,6 +365,11 @@ kopiert wurden – `users/@me` klappt damit noch, der Terminzugriff nicht. Neuer
 Token im Developer Portal unter *Bot → Reset Token*.
 
 ## Werkzeuge
+
+`npm run check:worker` prüft den Cloudflare-Worker, ohne Cloudflare: Der Test
+nimmt den echten `src/worker.js` in Node, gibt ihm eine nachgebaute KV und prüft
+Routen, Keksel, Zeitplan und Wochenmodell. Ohne Konto, Token und Netz.
+Beschreibung im Abschnitt über die Workers.
 
 `tools/shot.mjs` legt einen Screenshot der laufenden Seite ab – praktisch, um
 Layout-Änderungen zu prüfen, ohne npm-Abhängigkeiten:
@@ -561,9 +572,185 @@ lieber ehrlich festgenagelt.
 Lägen sie im Repo, schleicht sich beim lokalen Testlauf leicht eine Woche
 Demo-Daten in die Seite, die dann veröffentlicht wird.
 
+## Veröffentlichen auf Cloudflare Workers
+
+Auf GitHub Pages läuft kein Code, sondern es werden alle **sechzig Minuten**
+Dateien erzeugt – und GitHub verschluckt davon erfahrungsgemäß welche
+(siehe oben). Der Worker dreht beides um: Es läuft **gar nichts** zwischen zwei
+Zeitplan-Läufen, und der Takt ist **fünf Minuten** statt einer Stunde.
+
+```
+                alle 5 Minuten (Cron Trigger)
+                        │
+                        ▼
+  scheduled()  ──►  Discord REST API
+                        │  src/discord.js, src/source.js
+                        ▼
+                     Workers KV          ← einziger Ort, an dem Termine liegen
+                        ▲
+GET /api/week ───────────┘
+   ▲
+   │                       static assets: app.js, style.css, Hintergrundbild
+browser ────────────────────► CDN (run_worker_first: nur /api/* und das Dokument)
+```
+
+**Der eine Unterschied, der alles andere erklärt:** Kein Seitenaufruf fragt
+Discord ab. Auf GitHub Pages entstehen die Daten im Deploy, auf dem Worker im
+Zeitplan – ein Besucherstrom kann also gar kein Rate Limit auslösen, und eine
+neu angesetzte Raid taucht auch dann auf, wenn gerade niemand die Seite offen
+hat.
+
+`npm start` bleibt davon unberührt: `server.js` startet weiter, und dieselben
+Module rechnen in beiden Laufzeiten dasselbe. Unterschiedlich ist nur, **wo** der
+Schnappschuss liegt – im Arbeitsspeicher (`memoryStore`) oder in der KV
+(`kvStore`), siehe `src/source.js`.
+
+### Einrichtung
+
+```bash
+npm install                       # nur für wrangler; npm start läuft ohne
+npx wrangler login
+npx wrangler kv namespace create KV      # -> id in wrangler.jsonc eintragen
+npx wrangler secret put DISCORD_TOKEN   # fragt nach dem Token, fragt nicht ins Log
+```
+
+In `wrangler.jsonc` gehören noch `DISCORD_GUILD_ID` und gegebenenfalls
+`TIMEZONE` in die `vars` – dieselben Werte wie in `.env`. Der Token gehört
+**nicht** dort hin: `vars` stehen im Klartext im Bundle, Secrets nicht.
+
+```bash
+npm run cf:deploy        # einmal
+npm run cf:tail          # mitlesen, was der Zeitplan tut
+```
+
+Die erste eigene Domain ist über *Workers & Pages → dein Worker → Settings →
+Domains & Routes* einzutragen; ohne das läuft der Worker unter
+`…workers.dev`.
+
+### Vorher prüfen
+
+```bash
+npm run check:worker
+```
+
+Der Test nimmt den **echten** `src/worker.js` in Node, gibt ihm eine
+nachgebaute KV und eine Umgebung, die sich als Cloudflare ausgibt, und prüft
+Routen, Keksel, Zeitplan und das Wochenmodell. Läuft ohne Konto, ohne Token und
+ohne Netz – deshalb findet er Fehler, bevor etwas veröffentlicht ist. Geprüft
+ist damit alles bis auf das, was erst Cloudflare beim Bauen daraus macht.
+
+Vor dem ersten Deploy zusätzlich von Hand, weil nur dort die echte KV zählt:
+
+```bash
+npm run cf:dev          # http://127.0.0.1:8787
+curl -I http://127.0.0.1:8787/            # -> Set-Cookie: raidkalender_api=1
+curl -s http://127.0.0.1:8787/api/week    # -> days[7], meta.cron = true
+curl -s "http://127.0.0.1:8787/cdn-cgi/local/scheduled"   # Zeitplan einmal auslösen
+```
+
+Fehlt der Keksel, hält `public/app.js` den Worker für eine Pages-Seite und
+zeigt eine leere Seite – der erste Blick geht dann an den ersten Aufruf.
+
+### Wie schnell eine neue Raid auftaucht
+
+Bis zu **fünf Minuten** (bis zum nächsten Zeitplanlauf) plus bis zu **eine
+Minute** (bis die KV den neuen Stand weltweit kennt) plus bis zu **fünf
+Minuten** (bis die offene Seite nachfragt). Also in aller Regel unter einer
+Stunde, meistens deutlich darunter – und anders als bei Pages mit fester
+Zusage, weil ein Zeitplan hier eingeplant und nicht bestritten wird.
+
+Zwei Feinheiten, die man kennen sollte:
+
+- **Eine Änderung am Zeitplan braucht bis zu 15 Minuten**, bis sie im Netz
+  gilt. Wer `*/5` auf `*` stellt, wartet also eine Viertelstunde.
+- **Ein Fehler leert den Kalender nicht.** Scheitert der Abruf, bleibt der
+  letzte gute Stand in der KV stehen; die Seite zeigt ihn mit `stale` und dem
+  Klartext aus `meta.problem`.
+
+### Was es kostet und wo die Grenzen sind
+
+| | Free | Paid (5 $/Monat) |
+| --- | --- | --- |
+| CPU je Anfrage und je Zeitplan | 10 ms | 30 s |
+| Anfragen | 100.000/Tag | unbegrenzt |
+| Cron Trigger | 5 | 250 |
+| Laufzeit eines Zeitplans | 15 min | 15 min |
+
+Für diese Anwendung ist der **Free-Tier-Tarif der Normalfall**: 288 Zeitplan-
+läufe am Tag plus der Besucherverkehr einer Gildenseite liegen weit unter den
+100.000 Anfragen. Die einzige Stelle, an der es eng werden *kann*, ist die
+10-ms-Grenze: Ein Zeitplanlauf macht zwei Discord-Abrufe und normalisiert die
+Antwort – das sollte reichen. Wird es doch zu viel, meldet Cloudflare den
+Fehler **1102** (`exceededCpu`) im Dashboard unter *Workers Logs*, und der
+Paid-Tarif hebt die Grenze auf 30 Sekunden.
+
+Die Zahlen stehen in der
+[Limits-Übersicht](https://developers.cloudflare.com/workers/platform/limits/) –
+sie ändern sich, wenn Cloudflare sie ändert.
+
+### Was sich gegenüber dem lokalen Server ändert
+
+| | `npm start` | Worker |
+| --- | --- | --- |
+| Discord-Abruf | bei Bedarf, gecacht | nur im Zeitplan |
+| Alter der Daten | höchstens `CACHE_TTL_MS` (60 s) | höchstens der Zeitplantakt (5 min) |
+| `meta.fetchedAt` | Zeitpunkt des Serverabrufs | Zeitpunkt des Zeitplans |
+| Zeitzone | frei wählbar | frei wählbar |
+| Blättern | unbegrenzt | unbegrenzt |
+| Spurendatei | `lanes.json` von der Platte, änderbar ohne Deploy | `lanes.json` im Bundle, änderbar mit Deploy |
+| `/api/health` | meldet `uptimeSeconds` | meldet `runtime: cloudflare-worker` |
+
+Der letzte Punkt ist kein Verlust: Bei einem Worker, den es in fünf Minuten
+woanders gibt, sagt „läuft seit 40 Sekunden" nichts. `npm run cf:tail` sagt
+mehr.
+
+### Neu: `/api/refresh`
+
+```bash
+curl -X POST https://DEINE-ADRESSE/api/refresh
+```
+
+Holt sofort neu und schreibt in die KV – das Gegenstück zu *Run workflow* bei
+den GitHub Actions. Ohne neuen Stand wird trotzdem geantwortet, mit
+`error`, wenn etwas klemmte.
+
+### Warum die Daten nicht im Bundle liegen
+
+`public/` ist bei einem Worker statisches Zubehör, nicht etwa ein Build-Ergebnis
+– was beim Deploy einmal hochgeladen wurde, bleibt so, bis wieder etwas
+deployt wird. Deshalb schreibt der Zeitplan in die KV und nicht in eine Datei:
+Eine neu angesetzte Raid darf keinen Deploy brauchen, um sichtbar zu werden.
+
+### Der Keksel
+
+`public/app.js` erfährt an einem Keksel (`raidkalender_api`), dass hinter der
+Adresse ein Server steht – sonst sucht es selbst danach und kostet bei jedem
+Öffnen einen 404, den jeder im Netzwerk-Tab für einen Fehler hält. Unter Node
+setzt `server.js` ihn beim Ausliefern des Dokuments. Im Worker macht das
+`src/worker.js`, und deshalb läuft in `wrangler.jsonc` auch das **Dokument**
+durch den Worker (`run_worker_first`), nicht nur `/api/*` – `app.js`,
+`style.css` und das 2-MB-Bild kommen weiterhin direkt vom CDN.
+
+Alternativ gäbe es `public/_headers`. Bewusst nicht benutzt: ob Static Assets
+dort ein `Set-Cookie` zulassen, ist zwischen Pages und Workers nicht dasselbe,
+und dieses eine Bit soll nicht an einer Ungewissheit hängen.
+
 ## Optional: Live statt pollen
 
 Statt des TTL-Caches lassen sich die Gateway-Events
 `GUILD_SCHEDULED_EVENT_CREATE`, `GUILD_SCHEDULED_EVENT_UPDATE` und
 `GUILD_SCHEDULED_EVENT_DELETE` abonnieren. Für einen Wochenkalender ist Polling
 alle 60 Sekunden aber in der Regel völlig ausreichend.
+
+Auch das ginge **auf Cloudflare**, in einem Durable Object statt im Zeitplan:
+Der DO hält `wss://gateway.discord.gg` offen, identifiziert sich mit dem Intent
+`GUILD_SCHEDULED_EVENTS` (2^16, im Developer Portal unter *Privileged Intents*
+zuschalten) und schreibt jede Änderung in dieselbe KV. Zwei Dinge wüsste man
+davor aber, und beide stehen in der
+[WebSocket-Doku](https://developers.cloudflare.com/workers/runtime-apis/websockets/):
+Ausgehende WebSockets **hibernieren nicht** – eine offene Verbindung hält das
+DO höchstens 15 Minuten wach, und jeder Deploy trennt **alle** WebSockets. Man
+bräuchte also eine Reconnect-Schleife mit `RESUME` und `session_id` in der
+DO-Storage, sonst stünde der Kalender nach jeder Veröffentlichung still, bis
+etwas anderes den Worker anfasst. Für fünf Minuten statt fünf Sekunden ist
+das der falsche Handel.
