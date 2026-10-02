@@ -41,9 +41,15 @@
           </div>
         </header>
 
+        <!-- Der Wrapper ist der Grund, warum sieben Tage auch auf einem Handy
+             nebeneinander stehen bleiben: Er scrollt waagerecht, Kopf und Raster
+             gemeinsam. Ein Scrollbalken nur auf dem Raster würde die Tage
+             gegeneinander verschieben. -->
         <section class="board" aria-label="Wochenübersicht">
-          <div class="board-head" id="boardHead"></div>
-          <div class="board-body" id="boardBody"></div>
+          <div class="board-scroll" id="boardScroll">
+            <div class="board-head" id="boardHead"></div>
+            <div class="board-body" id="boardBody"></div>
+          </div>
         </section>
 
         <footer class="legend" id="legend"></footer>

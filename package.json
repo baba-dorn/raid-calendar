@@ -12,7 +12,6 @@
     "dev": "node --watch server.js",
     "snapshot": "node tools/snapshot.mjs",
     "preview": "node tools/serve-static.mjs",
-    "check:workflow": "node tools/workflow-check.mjs",
     "check:worker": "node tools/worker-check.mjs",
     "cf:dev": "npx wrangler dev",
     "cf:deploy": "npx wrangler deploy",

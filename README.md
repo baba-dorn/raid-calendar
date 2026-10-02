@@ -192,10 +192,11 @@ GET /api/week?start=YYYY-MM-DD&tz=Europe/Berlin
 public/app.js       Zeitachse (stückweise linear), Tagesspalten, Karten
 ```
 
-Derselbe Weg läuft in drei Ausprägungen: lokal aus `server.js`, auf GitHub Pages
-aus `tools/snapshot.mjs` (Dateien statt API) und auf Cloudflare aus
-`src/worker.js`, wo der Zeitplan in die KV schreibt und `/api/week` nur noch
-liest. Unterschiedlich ist jeweils nur, wo der Schnappschuss liegt.
+Derselbe Weg läuft in drei Ausprägungen: lokal aus `server.js`, in der Cloud aus
+`src/worker.js` – wo der Zeitplan in die KV schreibt und `/api/week` nur noch
+liest – und ohne Server aus `tools/snapshot.mjs`, das Dateien statt einer API
+schreibt (siehe *Früher: statisch über GitHub Pages*). Unterschiedlich ist
+jeweils nur, wo der Schnappschuss liegt.
 
 ### API
 
@@ -448,136 +449,47 @@ Messungen; sie seien hier genannt, weil sie das Ergebnis verfälscht haben:
   Als 8-Bit gelesen ist 0,46 fast Schwarz, und eine helle Schrift sieht
   unsichtbar aus. Der Farbparser prüft deshalb die Schreibweise.
 
-## Veröffentlichen auf GitHub Pages
+## Früher: statisch über GitHub Pages
 
-GitHub Pages liefert **nur Dateien** aus, kein Node. `/api/week` gibt es dort
-also nicht, und die Seite wäre leer. Die Lösung ist nicht ein Umbau des
-Frontends, sondern ein zweiter Weg zu denselben Daten: Dieselbe Pipeline, die
-auch der Server benutzt, läuft **vorab** einmal durch und schreibt ihr Ergebnis
-als Dateien ab.
+Bis Oktober 2026 lief die Seite als Dateien auf GitHub Pages: Ein Workflow
+lief `tools/snapshot.mjs` einmal pro Stunde, schrieb `public/data/*.json`, und
+Pages lieferte die Dateien aus. Zwei Eigenschaften dieser Lösung ließen sich
+nicht retten:
 
-```
-tools/snapshot.mjs  →  public/data/<wochenstart>.json
-                        public/data/latest.json
-                        public/data/index.json
-```
+- **GitHub verwirft planmäßige Läufe.** Von vier Zeitmarken pro Stunde kam in
+  neun Stunden genau eine durch – die Seite war sechs Stunden alt, obwohl der
+  Zeitplan das nicht vorsah. Mit nur *einer* Zeitmarke kam der Lauf deutlich
+  zuverlässiger durch, aber auch der war ein Mittelwert und keine Zusage.
+- **Kein Code, kein Abruf.** Von Discord erfuhr die Seite nichts. Eine neu
+  angesetzte Raid musste erst durch einen Deploy, damit sie überhaupt
+  geschnitten werden konnte.
 
-`app.js` fragt `data/` zuerst ab und fällt auf `/api/week` zurück. Dieselbe
-`public/`-Mappe läuft damit lokal **mit** und auf Pages **ohne** Server, ohne
-dass ein Build-Schritt irgendetwas umschreibt.
+Beides löst der Worker im nächsten Abschnitt: Dort fragt ein Zeitplan alle fünf
+Minuten selbst bei Discord nach, und die Daten landen in einer KV statt in
+einem Deploy. Der statische Weg ist abgeschaltet – Workflow, Prüfskript und
+`.nojekyll` sind aus dem Repo entfernt, und `public/data/` entsteht nur noch,
+wenn man `npm run snapshot` von Hand laufen lässt.
+
+Zwei Werkzeuge bleiben, weil sie ohne Server nützlich sind:
 
 ```bash
-npm run snapshot     # Wochen als Dateien erzeugen (Demo, wenn kein Token da ist)
-npm run preview      # statisch unter /raid-calendar/ ausliefern, wie Pages
+npm run snapshot     # Wochen als Dateien nach public/data/ – zum Nachsehen
+npm run preview      # liefert public/ statisch unter /raid-calendar/ aus
 ```
 
 `npm run preview` ist absichtlich strenger als `npm start`: Es liefert unter
-`/raid-calendar/` aus und hat **keine** API. Genau so verhält sich Pages. Ein
-absoluter Pfad wie `/app.js` landet dort im Repo-Root – die Seite bleibt weiß,
-ohne dass irgendwo ein Fehler steht. Deshalb sind alle Pfade relativ
-(`./style.css`, `./app.js`, `./raid-calendar-bg.png`).
-
-### Einrichtung (zwei Handgriffe, beide brauchen Schreibrechte)
-
-1. **Settings → Pages → Source: „GitHub Actions“.** Ohne das gibt es keine
-   Pages-Site, und der Deployment-Schritt läuft ins Leere.
-2. **Settings → Secrets and variables → Actions**, zwei Secrets anlegen:
-   `DISCORD_TOKEN` und `DISCORD_GUILD_ID` – dieselben Werte wie in der
-   `.env`. Der Workflow bricht ab, wenn sie fehlen, statt stillschweigend eine
-   Woche **Demo-Daten** zu veröffentlichen.
-
-Danach läuft `.github/workflows/publish.yml` **stündlich** (Minute 23) sowie
-bei jedem Push auf `main` und auf Zuruf (*Run workflow*). Ein Lauf dauert
-wenige Sekunden.
-
-### Wie schnell eine neue Raid auftaucht
-
-GitHub Pages **pollt nichts**. Dort läuft kein Code, es werden nur Dateien
-ausgeliefert – wer an Discord etwas einträgt, meldet das der Seite nicht. Der
-einzige Weg ist der Workflow.
-
-**Und der Zeitplan ist unzuverlässiger, als er aussieht.** GitHub schreibt in
-der eigenen Doku, planmäßige Läufe könnten unter Last verzögert und
-verworfen werden – *„If the load is sufficiently high, some queued jobs may be
-dropped"*. Ausprobiert mit vier Läufen pro Stunde (`:07 :22 :37 :52`): In neun
-Stunden kam **genau einer** durch, die Seite war sechs Stunden alt, obwohl der
-Zeitplan das nicht vorsah.
-
-Deshalb steht dort jetzt **eine** Zeitmarke statt vier. Ein einzelner Eintrag
-in der Warteschlange kommt deutlich zuverlässicher durch als vier konkurrierende
-– realistisch sind die Daten **etwa eine Stunde alt**, garantiert ist der
-Abstand nicht. Für „jetzt sofort" gibt es *Run workflow* in der Liste der
-Actions, und jeder Push auf `main` veröffentlicht ebenfalls sofort.
-
-Wer eine Zusage statt eines Mittelwerts braucht, kommt mit GitHub Pages nicht
-aus: Dann muss etwas laufen, das dauerhaft läuft – der eigene Rechner über die
-Windows-Aufgabenplanung, oder ein Serverless-Cron. Beides verlagert den
-Discord-Token aus dem Repo.
-
-Die Seite prüft zusätzlich selbst nach: Alle fünf Minuten fragt sie
-`data/latest.json` ab, und **nur wenn sich der Erzeugungszeitpunkt geändert
-hat**, wird neu gerendert. Beim Zurückholen eines Tabs aus dem Hintergrund
-passiert das sofort. Das Nachladen bewegt den Betrachter nirgends hin – es holt
-nur die gerade gezeigte Woche neu, auch wenn er in einer anderen blättert.
-
-Damit sich beurteilen lässt, ob die Kette läuft, steht in der Statuszeile nicht
-nur `Stand 15:31`, sondern `Stand 15:31 · vor 18 Min.`. Ohne das Alter sieht
-eine Seite um 15:35 und um 17:20 völlig gleich aus, und niemand kann
-unterscheiden, ob gerade nichts anliegt oder der Plan seit zwei Stunden nichts
-Neues bringt. Das Alter läuft bei jedem Prüfzyklus mit.
-
-Zur Einordnung der Zahlen: Aus einem Änderungswunsch in Discord bis zum
-sichtbaren Termin liegen bis zu etwa **eine Stunde** (bis zum nächsten Lauf) plus
-etwa **zehn Minuten** (bis das CDN die neue Datei ausliefert) plus bis zu
-**fünf Minuten** (bis die offene Seite nachfragt). Das ist keine Rechenaufgabe,
-sondern das, was GitHub Pages hergibt.
-
-Der Takt ist weder teuer für dich noch für Besucher: Ein öffentliches Repo
-rechnet Standard-Runner umsonst ab, die 24 Läufe am Tag also gratis. Und ein
-erneutes Deployment ändert `app.js`, `style.css` und das 2-MB-Bild nicht an,
-ihre ETags bleiben gleich, der Browser beantwortet die Nachfrage mit 304,
-ohne einen Byte neu zu holen. Neu geladen wird wirklich nur die kleine
-Datendatei – und die holt sich die Seite ohnehin nur, wenn sich etwas geändert
-hat.
-
-Der Zeitplan steht bewusst auf Minute 23 und nicht auf `:00`: GitHub stellt
-Läufe, die auf die volle Stunde fallen, zurück.
-
-```bash
-npm run check:workflow   # vor dem Push
-```
-
-Eine verrutschte Einrückung in `publish.yml` kostet sonst einen Lauf, der
-sofort mit *„This run likely failed because of a workflow file issue"* abbricht
-— ohne Zeilennummer, weil der Lauf gar nicht erst startet. Der Prüfer fängt
-das ab, bevor es auf GitHub landet. Er liest außerdem den Cron-Ausdruck
-**beide Felder** aus und sagt, welchen Takt er verstanden hat: Gerade das hat
-hier zweimal getäuscht, einmal über „alle Viertelstunde, die in Wahrheit alle
-sechs Stunden liefen" und einmal über einen Takt, den es gar nicht gab.
-
-### Was sich auf Pages ändert
-
-| | mit Server | auf Pages |
-|---|---|---|
-| Zeitzone | umrechen, Auswahlfeld vollwertig | **gesperrt** auf die eine Zone, für die geschnitten wurde |
-| Blättern | beliebig | nur über den erzeugten Bereich (`data/index.json`); die Pfeile enden dort |
-| Diagnose-Link | zeigt `/api/health` | weggelassen – es gibt keinen Server, den man fragen könnte |
-
-Die gesperrte Zeitzone ist Absicht, keine Einschränkung durch die Technik: Der
-Schnitt entsteht beim Erzeugen der Datei, für genau eine Zone. Ein Auswahlfeld,
-das beim Wechsel zurückspringt, verspricht etwas, das dort nicht stattfindet –
-lieber ehrlich festgenagelt.
-
-`public/data/` steht in `.gitignore`: Die Dateien werden im Deployment erzeugt.
-Lägen sie im Repo, schleicht sich beim lokalen Testlauf leicht eine Woche
-Demo-Daten in die Seite, die dann veröffentlicht wird.
+`/raid-calendar/` aus und hat **keine** API. Ein absoluter Pfad wie `/app.js`
+landet dort im Repo-Root – die Seite bleibt weiß, ohne dass irgendwo ein Fehler
+steht. Genau so verhält sich eine reine Dateiauslieferung, und deshalb sind
+alle Pfade in `index.html` und `app.js` relativ.
 
 ## Veröffentlichen auf Cloudflare Workers
 
-Auf GitHub Pages läuft kein Code, sondern es werden alle **sechzig Minuten**
-Dateien erzeugt – und GitHub verschluckt davon erfahrungsgemäß welche
-(siehe oben). Der Worker dreht beides um: Es läuft **gar nichts** zwischen zwei
-Zeitplan-Läufen, und der Takt ist **fünf Minuten** statt einer Stunde.
+Auf GitHub Pages (siehe *Früher: statisch über GitHub Pages*) lief kein Code,
+sondern es wurden alle **sechzig Minuten** Dateien erzeugt – und GitHub
+verschluckt davon erfahrungsgemäß welche. Der Worker dreht beides um: Es läuft
+**gar nichts** zwischen zwei Zeitplan-Läufen, und der Takt ist **fünf Minuten**
+statt einer Stunde.
 
 ```
                 alle 5 Minuten (Cron Trigger)
@@ -623,9 +535,29 @@ npm run cf:deploy        # einmal
 npm run cf:tail          # mitlesen, was der Zeitplan tut
 ```
 
-Die erste eigene Domain ist über *Workers & Pages → dein Worker → Settings →
-Domains & Routes* einzutragen; ohne das läuft der Worker unter
-`…workers.dev`.
+### Die Adresse
+
+Die Seite liegt unter **`raids.joinoops.win`**. Die Zone `joinoops.win` läuft
+über dieselbe Cloudflare, deshalb genügt ein Eintrag, und Cloudflare legt den
+DNS-Eintrag selbst an:
+
+*Workers & Pages → discord-week-calendar → Settings → Domains & Routes → Add →
+Custom domain* → `raids.joinoops.win`.
+
+Ohne diesen Eintrag antwortet der Worker nur unter
+`discord-week-calendar.joachim-happel.workers.dev`. Beide Adressen liefern
+denselben Stand; `workers.dev` ist nur die Notadresse.
+
+Läuft die eigene Domain, kann `workers_dev` abgeschaltet werden – in
+[wrangler.jsonc](wrangler.jsonc) `"workers_dev": false`. **Erst danach
+deployen**: Solange die eigene Domain fehlt, wäre der Worker danach unter
+keinem Namen mehr erreichbar. Mit einem Eintrag mehr ist das nur eine Adresse
+statt zwei.
+
+Am Code ändert eine eigene Domain nichts. Der Keksel gilt für `Path=/`,
+`index.html` verweist mit `./app.js` und `./style.css` auf relative Pfade, und
+`/api/week` ist ein reiner Pfad derselben Herkunft. Eine eingebaute Adresse, die
+ausschreiben müsste, gibt es nicht.
 
 ### Vorher prüfen
 
@@ -648,7 +580,7 @@ curl -s http://127.0.0.1:8787/api/week    # -> days[7], meta.cron = true
 curl -s "http://127.0.0.1:8787/cdn-cgi/local/scheduled"   # Zeitplan einmal auslösen
 ```
 
-Fehlt der Keksel, hält `public/app.js` den Worker für eine Pages-Seite und
+Fehlt der Keksel, hält `public/app.js` den Worker für eine reine Dateiseite und
 zeigt eine leere Seite – der erste Blick geht dann an den ersten Aufruf.
 
 ### Wie schnell eine neue Raid auftaucht

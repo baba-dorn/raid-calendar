@@ -14,6 +14,7 @@ const els = {
   todayBtn: document.getElementById('todayBtn'),
   timezone: document.getElementById('timezone'),
   status: document.getElementById('status'),
+  boardScroll: document.getElementById('boardScroll'),
   boardHead: document.getElementById('boardHead'),
   boardBody: document.getElementById('boardBody'),
   legend: document.getElementById('legend'),
@@ -1003,8 +1004,28 @@ function compactClock(minutes) {  const m = (((Math.round(minutes) % MINUTES_PER
  * Brett
  * ------------------------------------------------------------------ */
 
+/**
+ * Die zuletzt vermessenen Karten, in der Reihenfolge, in der sie im Brett
+ * hängen. `fitCard` entscheidet an der *gemessenen* Kartenbreite, ob ein Cover
+ * bleibt, wie viele Zeilen der Name bekommt und wie hoch die Karte wird – und
+ * misst genau einmal, direkt nach dem Einhängen.
+ *
+ * Sobald das Brett waagerecht scrollt, ist das eine Momentaufnahme: Beim
+ * Drehen des Geräts, beim Wechsel zwischen Hoch- und Querformat oder beim
+ * Ziehen eines Browserfensters ist die Spalte anders breit, und Cover,
+ * Zeilenzahl und Höhe wären weiterhin die von vorher. Dieselbe Liste lässt sich
+ * deshalb erneut vermessen, ohne das Brett neu aufzubauen.
+ */
+let refitQueue = [];
+
+/** Für welche Woche das Brett zuletzt aufgebaut wurde, siehe `revealToday`. */
+let boardWeek = null;
+
 function renderBoard(week) {
   els.boardBody.replaceChildren();
+  // Zur neuen Woche gehören neue Karten, und die alten Maße dürfen nicht
+  // nachgerechnet werden.
+  refitQueue = [];
 
   const total = week.days.reduce((sum, day) => sum + day.occurrences.length, 0);
 
@@ -1153,8 +1174,88 @@ function renderBoard(week) {
 
   // Erst jetzt sind die Karten messbar. Der Durchgang läuft vor dem ersten
   // Bildschirm, das Nachflackern bemerkt niemand.
+  refitQueue = pending;
   for (const built of pending) fitCard(built);
+
+  // Nur beim ersten Aufbau und beim Wochenwechsel, nicht bei jedem Datenrefresh:
+  // Sonst zöge ein stilles Nachladen im Hintergrund den Blick wieder auf den
+  // heutigen Tag, während jemand den Mittwoch liest.
+  if (boardWeek !== week.weekStart) {
+    boardWeek = week.weekStart;
+    revealToday();
+  }
 }
+
+/**
+ * Scrollt das Brett so weit, dass der heutige Tag am linken Rand steht – aber
+ * nur, wenn es überhaupt breiter ist als das Fenster. Sonst würde jeder normale
+ * Fensterwechsel die Seite zurücksetzen, obwohl gar nichts zu scrollen ist.
+ *
+ * Der Versatz ist die Breite der Zeitspalte: Sie klebt am linken Rand des
+ * Scrollkastens und überdeckt dort alles, was darunter durchzieht. Ein Tag, der
+ * darunter verschwindet, ist genau so verloren wie ein Tag, den es nicht gibt.
+ * Klebt die Achse in diesem Browser nicht (siehe `.grid-axis` in `style.css`),
+ * bleibt links ein Streifen des Vortags stehen – das liest sich als normales
+ * Scrollen und nicht als Fehler.
+ */
+function revealToday() {
+  const scroller = els.boardScroll;
+  if (!scroller) return;
+
+  scroller.scrollLeft = 0;
+  if (scroller.scrollWidth <= scroller.clientWidth + 1) return;
+
+  const today = els.boardBody.querySelector('.grid-day--today');
+  if (!today) return;
+
+  const axis = els.boardBody.querySelector('.grid-axis');
+  const reserve = axis ? axis.offsetWidth : 0;
+  scroller.scrollLeft +=
+    today.getBoundingClientRect().left - scroller.getBoundingClientRect().left - reserve;
+}
+
+/**
+ * Neuvermessen, sobald sich die Fensterbreite geändert hat.
+ *
+ * `fitCard` ist wiederholbar: Es entfernt Cover und Rhythmuszeile, wenn sie
+ * nicht mehr hineinpassen, und legt sie neu an, wenn doch – der zweite Durchgang
+ * auf gleicher Breite landet also auf demselben Ergebnis wie der erste.
+ *
+ * Der Nachlass ist Absicht: Beim Ziehen eines Fensters feuert `resize` im
+ * Millisekundentakt, und jede Messung erzwingt einen Umbruch von Zeilen und
+ * Höhen. 120 ms nach dem letzten Ereignis ist eine ruhige Seite und kostet
+ * trotzdem nichts, was man merkt.
+ */
+let refitTimer = 0;
+
+function scheduleRefit() {
+  clearTimeout(refitTimer);
+  refitTimer = setTimeout(() => {
+    for (const built of refitQueue) fitCard(built);
+  }, 120);
+}
+
+window.addEventListener('resize', scheduleRefit);
+// `orientationchange` feuert unter iOS vor `resize` und weiß die neue Breite
+// noch nicht – deshalb dieselbe Warteschlange, der zweite Aufruf gewinnt.
+window.addEventListener('orientationchange', scheduleRefit);
+
+/**
+ * Merkt sich, ob das Brett links steht oder nicht.
+ *
+ * Davon hängt der Schatten an der Zeitspalte ab: Solange nichts gescrollt ist,
+ * liegt unter ihr nichts, und ein Schatten täte so, als verdeckte sie gerade
+ * einen Nachbarn. Gescrollt wird, kommt er zurück.
+ *
+ * `passive`, weil beim Scrollen nichts verhindert wird – der Handler soll
+ * niemals eine Geste verschlucken. Und `toggle` mit demselben Wahrheitswert
+ * ändert am Zustand nichts, deshalb kostet jeder Raster-Tick nur einen Vergleich.
+ */
+function markScrollPosition() {
+  els.boardScroll.classList.toggle('is-scrolled', els.boardScroll.scrollLeft > 1);
+}
+
+els.boardScroll.addEventListener('scroll', markScrollPosition, { passive: true });
 
 /* ------------------------------------------------------------------ *
  * Marke, Legende, Kopf

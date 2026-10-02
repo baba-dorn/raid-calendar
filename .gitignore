@@ -5,9 +5,10 @@ node_modules/
 .DS_Store
 demo_banner/
 
-# Von `tools/snapshot.mjs` erzeugt und von der GitHub-Action frisch ins
-# Deployment gelegt. Läge es im Repo, schleicht sich beim lokalen Testlauf
-# leicht eine Woche Demo-Daten in die Seite, die dann veröffentlicht wird.
+# Von `tools/snapshot.mjs` erzeugt, wenn man es von Hand laufen lässt. Früher
+# lag hier das Deployment von GitHub Pages; das gibt es nicht mehr. Läge es im
+# Repo, schleicht sich beim lokalen Testlauf leicht eine Woche Demo-Daten in
+# die Seite.
 public/data/
 
 # Von Wrangler lokal: der Cache des Workers und der KV unter `wrangler dev`.

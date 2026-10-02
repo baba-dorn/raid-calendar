@@ -20,6 +20,29 @@
   /* Anzeigehöhe einer Stunde und Breite der Achsenspalte. */
   --hour-h: 46px;
   --axis-col: 52px;
+  /* Innenabstand des Bretts links und rechts. Steht hier und nicht bei
+   * `.board-head`/`.board-body`, weil beide dieselbe Zahl brauchen und
+   * `--board-min` sie mitrechnet: Zwei abweichende Werte hießen am Ende
+   * sieben Tage, die um 14 px versetzt zu ihrem Kopf sitzen. */
+  --board-pad: 14px;
+  /**
+   * Mindestbreite einer Tagesspalte. Darunter ist die Terminkarte nicht mehr
+   * lesbar: `fitCard` wirft das Cover weg, kappt den Namen auf eine Zeile und
+   * lässt die Uhrzeit auf 10,5 px schrumpfen und umbrechen. 124 px tragen
+   * Uhrzeit plus zwei Namenszeilen ohne Cover – deshalb ist es die Breite,
+   * an der das Brett von selbst anfängt zu scrollen, statt weiter zu
+   * schrumpfen. Wer sie erhöht, sieht mehr Tage auf einmal und scrollt mehr.
+   */
+  --day-col: 124px;
+  /* Achse, sieben Tage, Innenabstand links und rechts. */
+  --board-min: calc(var(--axis-col) + 7 * var(--day-col) + 2 * var(--board-pad));
+  /**
+   * Das Brett in deckender Form. `--surface-solid` ist halbtransparent, eine
+   * darunter durchlaufende Terminkarte würde sonst unter der klebenden
+   * Zeitspalte durchscheinen. Dieselbe Fläche, nur ohne Transparent – deshalb
+   * sieht man am Rand keinen Unterschied.
+   */
+  --opaque-board: linear-gradient(var(--surface-solid), var(--surface-solid)), var(--board);
 
   /* Der Schleier über `raid-calendar-bg.png`. Er ist kein Effekt, sondern die
    * Bedingung dafür, dass Text lesbar bleibt: Das Bild ist ein Raum, in dem
@@ -76,13 +99,15 @@ body {
   margin: 0 auto;
   padding: 26px 26px 40px;
   min-height: 100vh;
+  /* Auf Handys mit ein- und ausklappender Leiste ist `100vh` die *größte*
+   * Höhe – der Fuß stünde dann im Nichts. `dvh` folgt dem sichtbaren Bereich;
+   * die Zeile darüber bleibt der Fallback für Browser, die es nicht kennen. */
+  min-height: 100dvh;
 }
 
-@media (max-width: 900px) {
-  .shell {
-    grid-template-columns: 1fr;
-  }
-}
+/* Alles, was unterhalb von 900 px anders gilt, steht gesammelt im Abschnitt
+ * „Handy" am Ende dieser Datei – dort, wo die Gründe beieinanderstehen und man
+ * sie auf einen Blick liest. */
 
 /* ---------- Linke Marken-Spalte ---------- */
 
@@ -382,13 +407,63 @@ select {
 .board-head {
   display: grid;
   grid-template-columns: var(--axis-col) repeat(7, minmax(0, 1fr));
-  padding: 0 14px;
+  min-width: var(--board-min);
+  padding: 0 var(--board-pad);
   border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
 }
 
+/**
+ * Der Grund, warum sieben Tage auch auf einem Handy nebeneinander stehen
+ * bleiben: Dieser Kasten scrollt waagerecht, und Kopf und Raster stecken beide
+ * darin. Sie sind zwei getrennte Grids mit derselben Spaltenzahl, scrollte nur
+ * das Raster, liefe der Tageskopf beim Ziehen weg und die Tage stünden unter
+ * den falschen Beschriftungen.
+ *
+ * Darum `min-width` auf beiden und nicht auf diesem Kasten: Seine Breite folgt
+ * dem Fenster, die Breite des Inhalts nicht. Solange das Fenster breiter ist
+ * als `--board-min`, scrollt gar nichts, der Umbruch bleibt also unsichtbar und
+ * setzt erst dort ein, wo das Brett ohnehin unlesbar geworden wäre.
+ *
+ * `overflow-x: auto` allein genügt; `overflow-y` rechnet der Browser zu
+ * `auto`, was hier nichts bringt, der Kasten ist so hoch wie sein Inhalt.
+ */
+.board-scroll {
+  overflow-x: auto;
+  /* Zieht der Finger am Rand, soll nicht die ganze Seite zurückschnellen:
+   * Das Brett nimmt die Geste an, aber nur für sich. */
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* Der Scrollbalken liegt am unteren Brett-Rand, also weit unten auf der Seite.
+ * Wer ihn sieht, hat ohnehin bis dorthin gescrollt, deshalb dick genug zum
+ * Bemerken und nicht größer. */
+.board-scroll::-webkit-scrollbar {
+  height: 9px;
+}
+
+.board-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.board-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+.board-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
 .head-corner {
+  position: sticky;
+  left: 0;
+  z-index: 4;
   border-right: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent),
+    var(--opaque-board);
 }
 
 .day-head {
@@ -451,7 +526,8 @@ select {
 
 .board-body {
   position: relative;
-  padding: 0 14px 14px;
+  min-width: var(--board-min);
+  padding: 0 var(--board-pad) 14px;
 }
 
 /* ---------- Zeitachse ---------- */
@@ -462,11 +538,43 @@ select {
 }
 
 /* Beschriftung sitzt nur an den Kanten der gelaufenen Abschnitte – im
-   zusammengedrückten Bereich gäbe es nichts zu beschriften. */
+   zusammengedrückten Bereich gäbe es nichts zu beschriften.
+
+   Sie klebt am linken Rand, während das Brett waagerecht läuft. Sonst wäre
+   nach dem Scrollen auf den Mittwoch keine Uhr mehr abzulesen, und genau die
+   Frage beantwortet die Achse: Wann läuft das?
+
+   Bündig (`left: 0`) und nicht am Innenabstand: Der Innenabstand ist kein
+   Schnitt, er schneidet nichts ab. Läge die Achse 14 px weiter rechts, bliebe
+   daneben ein Streifen des weggescrollten Vortags stehen und man läse mitten
+   im Wort abgeschnittene Texte ("19:30 – 23:45" als "19:", "pp", "en"). In
+   Ruhe steht sie dadurch 14 px vor dem ersten Tag – das ist ein Spalt, kein
+   Loch, und links bleibt nichts durch.
+
+   Sollte ein Browser `sticky` im Grid nicht mitmachen, bleibt die Achse, wo
+   sie ist: Sie verschwindet dann beim Scrollen, statt etwas zu verdecken. */
+
+/**
+ * Der Schatten erscheint nur, wenn wirklich etwas unter der Achse durchzieht.
+ * Ohne ihn sähe der abgeschnittene Nachbartag aus wie ein Fehler, mit ihm wie
+ * das, was es ist: Der Rand einer Spur, die sich unter der Achse hindurchbewegt.
+ *
+ * In Ruhe (und im Fenster, das breit genug ist und gar nicht scrollt) bleibt er
+ * weg – ein Schatten zwischen Achse und Montag, wo nichts überlagert wird,
+ * wäre eine Lüge in Pixeln. `is-scrolled` setzt `app.js`.
+ */
+.board-scroll.is-scrolled .grid-axis,
+.board-scroll.is-scrolled .head-corner {
+  box-shadow: 9px 0 14px -8px rgb(0 0 0 / 0.8);
+}
+
 .grid-axis {
-  position: relative;
+  position: sticky;
+  left: 0;
+  z-index: 3;
   height: var(--grid-height);
   border-right: 1px solid var(--line);
+  background: var(--opaque-board);
 }
 
 .grid-tick {
@@ -1011,3 +1119,121 @@ select {
  * Karte Platz hatten. `fitCard` misst den Zeilenbedarf inzwischen selbst und
  * schreibt `--title-lines`; die Schätzung daneben hätte nur dazwischengefunkt.
  * Der Deckel hängt allein noch an der Kartenbreite, nicht am Fenster. */
+
+/* ---------- Handy ---------- */
+
+/**
+ * Alles hier ist eine Folge davon, dass das Brett ab `--board-min` scrollt: Ein
+ * Fenster, das schmaler ist, muss den Rest nicht mehr verstecken, es muss ihn
+ * bedienbar machen. Der Desktop-Zustand bleibt unangetastet, weil kein einziges
+ * dieser Werte dort gilt.
+ */
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+    /* Auf einem ausgeschnittenen Gerät ist 26 px Innenabstand Luxus; `max()`
+     * nimmt den Einschnitt, wo es einen gibt, und sonst den Innenabstand. */
+    padding: 20px max(20px, env(safe-area-inset-right))
+      max(32px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  }
+
+  /* `background-attachment: fixed` friert das Bild auf iOS-Safari beim
+   * Scrollen ein – mitten im Brett, statt am Seitenrand. Das Bild hängt dann
+   * an der Seite, wie es ohnehin gemeint ist. */
+  body {
+    background-attachment: scroll;
+  }
+
+  /* Die Markenspalte klebt auf dem Desktop, weil daneben die Seite weiterläuft.
+   * Unter dem Brett steht sie über allem und würde als 300 px hoher Balken am
+   * oberen Rand hängen bleiben, während man zur eigentlichen Seite will. */
+  .brand {
+    position: static;
+    padding: 16px;
+  }
+
+  .brand-crest {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    font-size: 28px;
+    margin-bottom: 4px;
+  }
+
+  .brand-name {
+    font-size: 22px;
+  }
+
+  .detail {
+    /* Wie `.shell`: rechts der Einschnitt, unten die Wischgeste. */
+    padding: 26px max(24px, env(safe-area-inset-right))
+      max(26px, env(safe-area-inset-bottom)) 24px;
+    /* Feste Höhe ist die *große* Fensterhöhe – auf dem Handy stünde dann der
+     * untere Rand des Panels unter der ein- und ausklappenden Leiste. */
+    height: 100dvh;
+  }
+}
+
+/**
+ * Berührbare Ziele. 38 px sind am Desktop eine gute Größe für einen Pfeil, am
+ * Finger sind sie es nicht – die Empfehlung liegt bei 44 px, und darunter trifft
+ * man beim Scrollen daneben.
+ */
+@media (max-width: 900px) {
+  .nav-btn {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .detail-close {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* Unter 16 px zoomt iOS beim Antippen des Auswahlfelds die ganze Seite
+   * heran. Das ist keine Feinheit, es zerlegt das Brett. */
+  select {
+    padding: 9px 12px;
+    font-size: 16px;
+  }
+
+  /* Doppelter Tipp-Sperrbalken, den Safari sonst auf jede Karte malt, und die
+   * 300 ms Verzögerung vor `click` – beides gehört zum schnellen Antippen. */
+  .ev,
+  .slot,
+  .nav-btn,
+  .board-empty-link,
+  select,
+  .detail-close {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/**
+ * Der Wochenkopf braucht feste 260 px für die Datumsspanne, dazu drei
+ * Schaltflächen. Das sind gut 490 px – mehr, als ein kleines Handy in der
+ * Zeile hat, und `.week-nav` bricht nicht um. Der Kopf lief damit aus dem
+ * Fenster und schob die ganze Seite waagerecht weg.
+ *
+ * Darum bricht er jetzt um: Die Woche über die volle Breite, darunter die drei
+ * Schaltflächen, wobei „Diese Woche" den Rest der Zeile füllt.
+ */
+@media (max-width: 560px) {
+  .week-nav {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .week-label {
+    /* `order: -1` setzt die Woche über die Schaltflächen, nicht zwischen sie. */
+    order: -1;
+    flex: 1 0 100%;
+    min-width: 0;
+    margin-bottom: 2px;
+  }
+
+  .nav-btn--wide {
+    flex: 1;
+  }
+}
