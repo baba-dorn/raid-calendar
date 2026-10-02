@@ -1237,3 +1237,7 @@ select {
     flex: 1;
   }
 }
+
+#brandMeta {
+  display: none;
+}
