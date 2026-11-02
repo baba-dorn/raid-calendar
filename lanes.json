@@ -53,6 +53,21 @@
       }
     },
     {
+      "id": "fightclub",
+      "label": "Fight Club",
+      "host": "Verpflichtende Builds - knallharte Action",
+      "glyph": "⚔️",
+      "note": "Einmal in der Woche  volle Konzentration auf Zusammenspiel und Taktik. Wir wollen die Gegner in Grund und Boden stampfen. Wer nicht mitmacht, wird gnadenlos rausgeworfen. <a href='https://joinoops.win/fight-club-builds'>Finde ein passendes Build für unsere Raids.</a>",
+      "voiceChannel": "1268920421403594832",
+      "accent": "#f0b429",
+      "match": ["fightclub"],
+      "baseline": {
+        "days": ["SU"],
+        "start": "18:30",
+        "end": "20:00"
+      }
+    },
+    {
       "id": "monthly",
       "label": "Monatlich",
       "host": "neu in der Community?",
