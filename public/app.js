@@ -1330,6 +1330,15 @@ function renderLanes(week) {
     if (lane.note) item.title = lane.note;
     els.brandLanes.append(item);
   }
+
+  const compass = el('div', 'brand-compass');
+  const compassLink = el('a', 'brand-compass-button', 'Builds-Kompass');
+  compassLink.href = 'https://joinoops.win/builds/';
+  compassLink.target = '_blank';
+  compassLink.rel = 'noopener noreferrer';
+  compassLink.title = 'Builds-Kompass öffnen';
+  compass.append(compassLink);
+  els.brandLanes.append(compass);
 }
 
 /** „19 – 22.30 Uhr“ bzw. „ab 23 Uhr“, wenn der Slot über Mitternacht läuft. */

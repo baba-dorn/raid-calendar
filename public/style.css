@@ -263,6 +263,39 @@ body {
   opacity: 1;
 }
 
+.brand-compass {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--violet) 45%, var(--line));
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.16), rgba(255, 255, 255, 0.04));
+}
+
+.brand-compass-button {
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  background: rgba(168, 85, 247, 0.24);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.brand-compass-button:hover,
+.brand-compass-button:focus-visible {
+  border-color: rgba(192, 132, 252, 0.8);
+  background: rgba(168, 85, 247, 0.42);
+}
+
+.brand-compass-button:active {
+  transform: translateY(1px);
+}
+
 /* ---------- Kopfleiste ---------- */
 
 .main {
