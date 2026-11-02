@@ -58,7 +58,7 @@ const DEFAULT_CONFIG = {
       glyph: '☀️',
       accent: '#f0b429',
       match: ['reset', 'kommi'],
-      baseline: { days: ['FR'], start: '20:00', end: '23:30' },
+      baseline: { days: ['FR'], start: '19:00', end: '23:00' },
     },
   ],
   assignments: [],
