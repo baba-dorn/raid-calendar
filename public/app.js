@@ -1332,11 +1332,11 @@ function renderLanes(week) {
   }
 
   const compass = el('div', 'brand-compass');
-  const compassLink = el('a', 'brand-compass-button', 'Builds-Kompass');
+  const compassLink = el('a', 'brand-compass-button', 'Buildskompass');
   compassLink.href = 'https://joinoops.win/builds/';
   compassLink.target = '_blank';
   compassLink.rel = 'noopener noreferrer';
-  compassLink.title = 'Builds-Kompass öffnen';
+  compassLink.title = 'Buildskompass öffnen';
   compass.append(compassLink);
   els.brandLanes.append(compass);
 }
