@@ -13,7 +13,7 @@
       "host": "mit Dorn",
       "glyph": "🌙",
       "accent": "#8fdc4a",
-      "note": "Wir sind ein Team. Ein Fokus. Ein Bollwerk. Getragen von einem Kern fightstarker Spielerinnen und Spieler ermöglicht dir unser Public selbst zur Primetime einfach mitzulaufen und starken Gegenern zu trotzden.",
+      "note": "Wir sind ein Team. Ein Fokus. Ein Bollwerk. Getragen von einem Kern fightstarker Spielerinnen und Spieler ermöglicht dir unser Public selbst zur Primetime einfach mitzulaufen und starken Gegenern zu trotzden. Wenn du spannende Schlachten suchst, oder einfach nur Spaß haben willst, bist du hier genau richtig.. <a href='https://joinoops.win/builds'>Finde ein passendes Build für unsere Raids.</a>",
       "voiceChannel": "1268920421403594832",
       "match": ["public"],
       "baseline": {
@@ -49,7 +49,7 @@
       "baseline": {
         "days": ["FR"],
         "start": "20:00",
-        "end": "23:30"
+        "end": "23:00"
       }
     },
     {
@@ -62,8 +62,8 @@
       "match": ["speed.?dating", "starter"],
       "baseline": {
         "days": ["Sa"],
-        "start": "17:00",
-        "end": "18:30"
+        "start": "19:00",
+        "end": "20:00"
       }
     }
   ],
@@ -74,10 +74,10 @@
     "'end' ist optional und eine Uhrzeit, keine Dauer: sie greift nur, wenn",
     "Discord beim Termin keine Endzeit hinterlegt hat, und schlägt dann die",
     "Grundzeile. Beispiel:",
-    "{ \"match\": \"Speed.?Dating\", \"lane\": \"public\", \"end\": \"19:00\" }"
+    "{ \"match\": \"Speed.?Dating\", \"lane\": \"public\", \"end\": \"20:00\" }"
   ],
   "assignments": [
     
-    { "match": "Speed.?Dating", "lane": "monthly" ,"end": "18:00" }
+    { "match": "Speed.?Dating", "lane": "monthly" ,"end": "20:00" }
   ]
 }
